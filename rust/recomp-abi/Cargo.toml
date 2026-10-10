@@ -1,0 +1,10 @@
+[package]
+name = "recomp-abi"
+description = "Rust side of the N64Recomp ABI: recomp_context, guest memory and C exports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]

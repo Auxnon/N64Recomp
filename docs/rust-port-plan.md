@@ -6,6 +6,17 @@ until the last C++ module is gone. Graphics use wgpu through
 [fast3d-rs](https://github.com/retrofoundry/fast3d-rs). `unsafe` lives in a short, named
 list of places, and every other crate uses `#![forbid(unsafe_code)]`.
 
+## Status
+
+- **Phase 0:** waiting on a Majora's Mask ROM (user-supplied) for the Zelda64Recomp baseline.
+  Gauntlet's microcode is being documented in a separate effort.
+- **Phase 1:** the `rust/recomp-abi` crate is written and tested. Remaining exit check:
+  replace one runtime function in a running game with a Rust export.
+  - `RecompContext` / `Fpr` layout is checked against `recomp.h` compiled by the C compiler.
+  - `GuestMemory` matches `MEM_*`, `LD`/`SD` and LWL/LWR/SWL/SWR/LDL/LDR/SDL/SDR over
+    200k random operations, compared against `recomp.h` (`rust/recomp-abi-ctest`).
+  - A `recomp_export!` / `GameFn` round trip works: Rust calls C, and C calls Rust.
+
 ## Target games
 
 1. **Zelda 64 first: proven ground.** [Zelda64Recomp](https://github.com/Zelda64Recomp/Zelda64Recomp)

@@ -1,0 +1,13 @@
+[package]
+name = "recomp-abi-ctest"
+description = "Differential tests: recomp-abi against the C definitions in include/recomp.h"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+recomp-abi = { path = "../recomp-abi" }
+
+[build-dependencies]
+cc = "1"

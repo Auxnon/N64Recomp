@@ -8,8 +8,27 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
 
 ## Status
 
-- **Phase 0:** waiting on a Majora's Mask ROM (user-supplied) for the Zelda64Recomp baseline.
-  Gauntlet's microcode is being documented in a separate effort.
+- **Phase 0 (in progress):** Zelda64Recomp `b65c482` (MM US) is cloned next to this repo.
+  - Building it with clang 22 needed two local fixes:
+    - Its pinned N64Recomp's `fmt` was moved to fmt 12.1.0, same as upstream's `81213c1`.
+    - `patches/Makefile` got `-Wno-error=incompatible-pointer-types`.
+  - **Golden recompiler output recorded:** `rust/golden/golden.sh` runs a given
+    N64Recomp/RSPRecomp pair on MM's four configs (`us.rev1`, `aspMain`, `njpgdspMain`,
+    `patches`) in a scratch directory. It writes `zelda64recomp-mm-us.sha256` (348 files, hashes
+    only) or checks against it. The C++ tools reproduce it exactly, and it's the output
+    Zelda64Recomp's build compiles. This is the Phase 4 exit check.
+  - Microcodes in the MM ROM: **F3DZEX.NoN fifo 2.08I** (F3DZEX2, no near clipping) and
+    **S2DEX fifo 2.08**. fast3d has neither.
+  - RT64 extended GBI used by MM's patches, by call count:
+    - Matrix groups (interpolation): `gEXMatrixGroup*`, `gEXPopMatrixGroup`,
+      `gEXEditGroupByAddress`.
+    - Widescreen alignment: `gEXSetViewportAlign`, `gEXSetRectAlign`, `gEXSetScissorAlign`.
+    - Push/pop state: `gEXPush/Pop{GeometryMode,OtherMode,CombineMode,Viewport,ProjectionMatrix}`.
+    - Extended draws: `gEXVertex`, `gEXTextureRectangle`, `gEXFillRectangle`.
+    - Other: `gEXVertexZTest`, `gEXEndVertexZTest`, `gEXForceUpscale2D`, `gEXSetRefreshRate`,
+      `gEXSetRDRAMExtended`, `gEXSetDitherNoiseStrength`, `gEXEnable`.
+  - The Gauntlet ROM has no "RSP Gfx ucode" string, possibly because it is compressed or
+    custom. A separate effort is documenting it.
 - **Phase 1:** the `rust/recomp-abi` crate is written and tested. Remaining exit check:
   replace one runtime function in a running game with a Rust export.
   - `RecompContext` / `Fpr` layout is checked against `recomp.h` compiled by the C compiler.
@@ -146,9 +165,17 @@ Every phase has an exit check. Don't start the next phase until it passes.
 ### Phase 2: fast3d inside Zelda64Recomp (MM), then Gauntlet
 
 - **2a, prerequisites in fast3d-rs, sent upstream:**
-  - Add F3DZEX2, using `hle/rsp_f3dex2.rs` as the template.
-  - Make RT64 extended GBI commands a recognized no-op, so draws continue without
-    interpolation or widescreen.
+  - Add F3DZEX2 (the NoN variant MM uses), using `hle/rsp_f3dex2.rs` as the template.
+  - Add S2DEX (MM uses it for 2D backgrounds and sprites).
+  - Handle the RT64 extended GBI commands MM uses (opcode `0x64`, `rt64_extended_gbi.h`):
+    - **Can be no-ops at first:** matrix groups, `EditGroupByAddress`, the alignment setters,
+      `SetRefreshRate`, `ForceUpscale2D`, `SetDitherNoiseStrength`, `SetRDRAMExtended`,
+      `Enable`. Without them we only lose interpolation and widescreen.
+    - **Need real implementations:**
+      - `gEXVertex`, `gEXTextureRectangle` and `gEXFillRectangle` draw geometry.
+      - The `Push`/`Pop` state commands change render state.
+      - `VertexZTest` / `EndVertexZTest` changes which geometry draws.
+      Treating any of these as no-ops would drop or corrupt geometry.
 
 - `recomp-render`:
   - `RecompRdram` handles the swizzle, KSEG0/TLB translation and segment table.

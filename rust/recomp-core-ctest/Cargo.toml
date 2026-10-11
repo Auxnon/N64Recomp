@@ -1,0 +1,13 @@
+[package]
+name = "recomp-core-ctest"
+description = "Differential tests: recomp-core against libstdc++ and {fmt}"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+recomp-core = { path = "../recomp-core" }
+
+[build-dependencies]
+cc = "1"

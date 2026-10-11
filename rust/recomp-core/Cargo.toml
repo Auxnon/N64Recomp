@@ -1,0 +1,10 @@
+[package]
+name = "recomp-core"
+description = "Shared pieces of the N64Recomp tools ported to Rust"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]

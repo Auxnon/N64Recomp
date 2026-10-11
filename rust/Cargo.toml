@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["recomp-abi", "recomp-abi-ctest", "recomp-runtime"]
+members = ["recomp-abi", "recomp-abi-ctest", "recomp-core", "recomp-core-ctest", "recomp-runtime", "rsp-recomp"]
 
 [workspace.package]
 edition = "2024"

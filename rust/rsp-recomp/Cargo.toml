@@ -1,0 +1,18 @@
+[package]
+name = "rsp-recomp"
+description = "Rust port of RSPRecomp: statically recompiles RSP microcode to C++"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "RSPRecomp"
+path = "src/main.rs"
+
+[dependencies]
+recomp-core = { path = "../recomp-core" }
+# The lib/rabbitizer submodule itself, so decoding and disassembly match the C++ tools.
+rabbitizer = { path = "../../lib/rabbitizer" }
+toml = "0.9"

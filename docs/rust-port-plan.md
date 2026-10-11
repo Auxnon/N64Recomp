@@ -39,6 +39,23 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
   - `GuestMemory` matches `MEM_*`, `LD`/`SD` and LWL/LWR/SWL/SWR/LDL/LDR/SDL/SDR over
     200k random operations, compared against `recomp.h` (`rust/recomp-abi-ctest`).
   - A `recomp_export!` / `GameFn` round trip works: Rust calls C, and C calls Rust.
+- **Phase 4 (started):** `rust/rsp-recomp` is a port of RSPRecomp, and the binary it builds
+  is also named `RSPRecomp`.
+  - Its output matches the golden corpus (`aspMain`, `njpgdspMain`).
+  - MM's configs never use overlay slots or `unsupported_instructions`. For those,
+    `rust/golden/rsp-diff.sh` runs the C++ and Rust tools on synthetic configs and checks
+    that their output is identical. The configs have 2×3 and 3 overlay permutations, plus
+    resume labels including delay slots.
+  - It uses the `lib/rabbitizer` submodule as a path dependency, so decoding and disassembly
+    compile from the exact sources the C++ tools use.
+  - `rust/recomp-core` holds the pieces the tools share:
+    - `cxx_hash`: unordered map and set types that iterate in libstdc++'s order, since the
+      C++ output depends on `std::unordered_*` iteration. `recomp-core-ctest` checks it
+      against the real containers.
+    - `cxx_fmt`: {fmt}'s `{:#X}`, which writes `0X` and puts the sign in front, e.g. `-0X10`.
+  - Byte-identical output assumes the reference tools were built against libstdc++
+    (Linux). A golden corpus recorded from MSVC builds would differ wherever the C++
+    iterates an unordered container.
 
 ## Target games
 

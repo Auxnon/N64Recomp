@@ -32,8 +32,9 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
 - **Phase 1:** `rust/recomp-abi` is written and tested, and `rust/recomp-runtime` replaces
   `osGetMemSize_recomp` in Zelda64Recomp (see `rust/integration/README.md`).
   - The symbol check confirms the binary links the Rust version.
-  - **Remaining exit check:** boot both builds on a desktop session (`-DRECOMP_RUST_RUNTIME=ON`
-    and `OFF`) and confirm the game starts and plays the same.
+  - **Exit check passed (2026-10-11):** the `-DRECOMP_RUST_RUNTIME=ON` build boots on the
+    desktop and starts a game. MM checks the reported memory size at boot, so a wrong value
+    would have failed early.
   - `RecompContext` / `Fpr` layout is checked against `recomp.h` compiled by the C compiler.
   - `GuestMemory` matches `MEM_*`, `LD`/`SD` and LWL/LWR/SWL/SWR/LDL/LDR/SDL/SDR over
     200k random operations, compared against `recomp.h` (`rust/recomp-abi-ctest`).

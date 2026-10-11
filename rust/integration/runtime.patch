@@ -1,0 +1,30 @@
+--- a/librecomp/src/recomp.cpp
++++ b/librecomp/src/recomp.cpp
+@@ -398,9 +398,14 @@
+     return recomp::RomValidationError::Good;
+ }
+ 
++#ifdef RECOMP_RUST_RUNTIME
++// Implemented in Rust (n64recomp/rust/recomp-runtime).
++extern "C" bool recomp_abi_install_guest_memory(uint8_t* rdram, size_t len_bytes);
++#else
+ extern "C" void osGetMemSize_recomp(uint8_t * rdram, recomp_context * ctx) {
+     ctx->r2 = 8 * 1024 * 1024;
+ }
++#endif
+ 
+ enum class StatusReg {
+     FR = 0x04000000,
+@@ -798,6 +803,12 @@
+         return;
+     }
+ 
++#ifdef RECOMP_RUST_RUNTIME
++    // Rust-side runtime functions reach RDRAM through this registration. Nothing in Rust may
++    // touch it after the munmap/VirtualFree at the end of this function.
++    recomp_abi_install_guest_memory(rdram, mem_size);
++#endif
++
+     recomp::register_heap_exports();
+     recomp::mods::register_config_exports();
+     recomp::mods::register_hook_exports();

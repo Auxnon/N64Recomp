@@ -1,0 +1,41 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 1cdda09..a778994 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -63,6 +63,14 @@ target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
+ 
+ add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
+ 
++# Rust port (github.com/Auxnon/N64Recomp, branch rust-port): replace runtime functions with
++# the Rust versions from rust/recomp-runtime.
++option(RECOMP_RUST_RUNTIME "Link the Rust runtime crate from the n64recomp checkout" OFF)
++if (RECOMP_RUST_RUNTIME)
++    include(${CMAKE_SOURCE_DIR}/../n64recomp/rust/integration/RecompRustRuntime.cmake)
++    recomp_link_rust_runtime(librecomp)
++endif()
++
+ target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/rt64/src)
+ 
+ # RecompiledFuncs - Library containing the primary recompiler output
+@@ -336,7 +344,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+     set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+     find_package(Threads REQUIRED)
+ 
+-    target_link_libraries(Zelda64Recompiled PRIVATE "-latomic -static-libstdc++" ${CMAKE_DL_LIBS} Threads::Threads)
++    target_link_libraries(Zelda64Recompiled PRIVATE "-latomic" ${CMAKE_DL_LIBS} Threads::Threads)
+ endif()
+ 
+ target_link_libraries(Zelda64Recompiled PRIVATE
+diff --git a/patches/Makefile b/patches/Makefile
+index a90db97..2d6f47c 100644
+--- a/patches/Makefile
++++ b/patches/Makefile
+@@ -5,7 +5,7 @@ LD      ?= ld.lld
+ 
+ CFLAGS   := -target mips -mips2 -mabi=32 -O2 -G0 -mno-abicalls -mno-odd-spreg -mno-check-zero-division \
+ 			-fomit-frame-pointer -ffast-math -fno-unsafe-math-optimizations -fno-builtin-memset \
+-			-Wall -Wextra -Wno-incompatible-library-redeclaration -Wno-unused-parameter -Wno-unknown-pragmas -Wno-unused-variable -Wno-missing-braces -Wno-unsupported-floating-point-opt
++			-Wall -Wextra -Wno-incompatible-library-redeclaration -Wno-unused-parameter -Wno-unknown-pragmas -Wno-unused-variable -Wno-missing-braces -Wno-unsupported-floating-point-opt -Wno-error=incompatible-pointer-types
+ CPPFLAGS := -nostdinc -D_LANGUAGE_C -DMIPS -I dummy_headers -I ../lib/mm-decomp/include -I ../lib/mm-decomp/src -I ../lib/mm-decomp/assets -I../lib/rt64/include
+ LDFLAGS  := -nostdlib -T patches.ld -T syms.ld -Map patches.map --unresolved-symbols=ignore-all --emit-relocs
+ 

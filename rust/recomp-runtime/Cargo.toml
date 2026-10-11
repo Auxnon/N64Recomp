@@ -1,0 +1,14 @@
+[package]
+name = "recomp-runtime"
+description = "Rust replacements for N64ModernRuntime functions, linked into the C++ runtime"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-or-later"
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+recomp-abi = { path = "../recomp-abi" }

@@ -29,8 +29,11 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
       `gEXSetRDRAMExtended`, `gEXSetDitherNoiseStrength`, `gEXEnable`.
   - The Gauntlet ROM has no "RSP Gfx ucode" string, possibly because it is compressed or
     custom. A separate effort is documenting it.
-- **Phase 1:** the `rust/recomp-abi` crate is written and tested. Remaining exit check:
-  replace one runtime function in a running game with a Rust export.
+- **Phase 1:** `rust/recomp-abi` is written and tested, and `rust/recomp-runtime` replaces
+  `osGetMemSize_recomp` in Zelda64Recomp (see `rust/integration/README.md`).
+  - The symbol check confirms the binary links the Rust version.
+  - **Remaining exit check:** boot both builds on a desktop session (`-DRECOMP_RUST_RUNTIME=ON`
+    and `OFF`) and confirm the game starts and plays the same.
   - `RecompContext` / `Fpr` layout is checked against `recomp.h` compiled by the C compiler.
   - `GuestMemory` matches `MEM_*`, `LD`/`SD` and LWL/LWR/SWL/SWR/LDL/LDR/SDL/SDR over
     200k random operations, compared against `recomp.h` (`rust/recomp-abi-ctest`).

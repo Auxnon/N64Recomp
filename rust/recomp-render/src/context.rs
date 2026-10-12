@@ -104,6 +104,16 @@ fn present_mode(available: &[wgpu::PresentMode]) -> wgpu::PresentMode {
         .unwrap_or(wgpu::PresentMode::Fifo)
 }
 
+/// The display has no alpha, so ask the compositor to ignore it. `Auto` can pick a
+/// premultiplied mode on Wayland, where any alpha below one shows what's behind the window.
+fn alpha_mode(available: &[wgpu::CompositeAlphaMode]) -> wgpu::CompositeAlphaMode {
+    if available.contains(&wgpu::CompositeAlphaMode::Opaque) {
+        wgpu::CompositeAlphaMode::Opaque
+    } else {
+        wgpu::CompositeAlphaMode::Auto
+    }
+}
+
 pub struct Fast3dContext {
     // Dropped in this order: the renderer (and its surface) before the instance.
     renderer: Renderer,
@@ -154,7 +164,7 @@ impl Fast3dContext {
             width: width.max(1),
             height: height.max(1),
             present_mode,
-            alpha_mode: wgpu::CompositeAlphaMode::Auto,
+            alpha_mode: alpha_mode(&caps.alpha_modes),
             view_formats,
             desired_maximum_frame_latency: 2,
         };
@@ -286,6 +296,13 @@ mod tests {
             surface_formats(&[Rgba8UnormSrgb]),
             (Rgba8UnormSrgb, vec![Rgba8Unorm])
         );
+    }
+
+    #[test]
+    fn alpha_mode_is_opaque_when_offered() {
+        use wgpu::CompositeAlphaMode::*;
+        assert_eq!(alpha_mode(&[PreMultiplied, Opaque]), Opaque);
+        assert_eq!(alpha_mode(&[PreMultiplied, Inherit]), Auto);
     }
 
     #[test]

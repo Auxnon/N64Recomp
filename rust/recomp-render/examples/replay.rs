@@ -160,6 +160,10 @@ fn read_back(
         let start = (y * row) as usize;
         out.extend_from_slice(&mapped[start..start + (width * 4) as usize]);
     }
+    // The VI shows color only (the game window asks for an opaque surface), so drop alpha.
+    for pixel in out.as_chunks_mut::<4>().0 {
+        pixel[3] = 0xFF;
+    }
     out
 }
 

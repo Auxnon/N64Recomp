@@ -1,7 +1,8 @@
 //! Saving frames for offline replay (`examples/replay.rs`).
 //!
 //! With `RECOMP_RENDER_DUMP=<dir>` set, the renderer saves the frames listed in
-//! `RECOMP_RENDER_DUMP_FRAMES` (comma-separated presented-frame numbers, default `600`). For
+//! `RECOMP_RENDER_DUMP_FRAMES` (comma-separated presented-frame numbers or `first-last`
+//! ranges, default `600`). For
 //! each graphics task in a listed frame it writes a snapshot of RDRAM taken while the task is
 //! drawn, and it appends one line per task and one for the VI registers to `frame<N>.txt`:
 //!
@@ -107,9 +108,17 @@ impl FrameDump {
 }
 
 fn parse_frames(list: &str) -> Vec<u64> {
-    list.split(',')
-        .filter_map(|item| item.trim().parse().ok())
-        .collect()
+    let mut frames = Vec::new();
+    for item in list.split(',').map(str::trim) {
+        if let Some((first, last)) = item.split_once('-') {
+            if let (Ok(first), Ok(last)) = (first.parse::<u64>(), last.parse::<u64>()) {
+                frames.extend(first..=last.min(first + 1000));
+            }
+        } else if let Ok(frame) = item.parse() {
+            frames.push(frame);
+        }
+    }
+    frames
 }
 
 /// RDRAM as big-endian bytes, up to [`SNAPSHOT_LIMIT`].
@@ -131,6 +140,7 @@ mod tests {
     #[test]
     fn frame_lists_skip_bad_entries() {
         assert_eq!(parse_frames("1, 20,x,300"), [1, 20, 300]);
+        assert_eq!(parse_frames("5-7,9"), [5, 6, 7, 9]);
     }
 
     #[test]

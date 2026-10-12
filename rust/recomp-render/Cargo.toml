@@ -10,11 +10,11 @@ rust-version = "1.88"
 
 [dependencies]
 recomp-abi = { path = "../recomp-abi" }
-fast3d = { git = "https://github.com/Auxnon/fast3d-rs", rev = "3b6493c" }
+fast3d = { git = "https://github.com/Auxnon/fast3d-rs", rev = "ddcb5e3" }
 wgpu = "29.0"
 raw-window-handle = "0.6"
 pollster = "0.3"
 log = "0.4"
 
 [dev-dependencies]
-n64-gbi = { git = "https://github.com/Auxnon/fast3d-rs", rev = "3b6493c" }
+n64-gbi = { git = "https://github.com/Auxnon/fast3d-rs", rev = "ddcb5e3" }

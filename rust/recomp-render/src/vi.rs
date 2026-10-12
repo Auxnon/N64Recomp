@@ -23,6 +23,46 @@ pub struct ViRegs {
 }
 
 impl ViRegs {
+    /// The fields in declaration order.
+    pub fn fields(&self) -> [u32; 14] {
+        [
+            self.status,
+            self.origin,
+            self.width,
+            self.intr,
+            self.v_current_line,
+            self.timing,
+            self.v_sync,
+            self.h_sync,
+            self.leap,
+            self.h_start,
+            self.v_start,
+            self.v_burst,
+            self.x_scale,
+            self.y_scale,
+        ]
+    }
+
+    /// The inverse of [`Self::fields`].
+    pub fn from_fields(f: [u32; 14]) -> Self {
+        Self {
+            status: f[0],
+            origin: f[1],
+            width: f[2],
+            intr: f[3],
+            v_current_line: f[4],
+            timing: f[5],
+            v_sync: f[6],
+            h_sync: f[7],
+            leap: f[8],
+            h_start: f[9],
+            v_start: f[10],
+            v_burst: f[11],
+            x_scale: f[12],
+            y_scale: f[13],
+        }
+    }
+
     /// The registers fast3d reads.
     ///
     /// ultramodern sets `VI_ORIGIN` to the framebuffer plus the mode's field origin, which
@@ -54,6 +94,12 @@ impl ViRegs {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fields_round_trip() {
+        let fields = std::array::from_fn(|i| i as u32 * 3 + 1);
+        assert_eq!(ViRegs::from_fields(fields).fields(), fields);
+    }
 
     #[test]
     fn origin_drops_the_field_offset_line() {

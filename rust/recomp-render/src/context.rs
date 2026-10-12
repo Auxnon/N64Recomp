@@ -9,6 +9,7 @@ use fast3d::{
 use recomp_abi::GuestMemory;
 
 use crate::diag::DiagLog;
+use crate::dump::FrameDump;
 use crate::rdram::RecompRdram;
 use crate::vi::ViRegs;
 
@@ -112,6 +113,7 @@ pub struct Fast3dContext {
     diags: DiagLog,
     size: (u32, u32),
     frames: u64,
+    dump: Option<FrameDump>,
 }
 
 impl Fast3dContext {
@@ -180,10 +182,14 @@ impl Fast3dContext {
             diags: DiagLog::new(verbose),
             size: (width, height),
             frames: 0,
+            dump: FrameDump::from_env(),
         })
     }
 
     pub fn send_dl(&mut self, task: &GfxTask) {
+        if let Some(dump) = &mut self.dump {
+            dump.task(self.frames, self.mem, task);
+        }
         let Some(ucode) = self.microcodes.lookup(self.mem, task) else {
             return;
         };
@@ -208,6 +214,9 @@ impl Fast3dContext {
             mem: self.mem,
             vi: Some(vi.to_fast3d()),
         };
+        if let Some(dump) = &mut self.dump {
+            dump.present(self.frames, &vi);
+        }
         match self.renderer.present(&hardware) {
             Ok(()) | Err(PresentError::SurfaceLost | PresentError::Timeout) => {}
             Err(e) => eprintln!("[fast3d] present failed: {e:?}"),

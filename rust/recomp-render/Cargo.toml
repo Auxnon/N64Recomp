@@ -18,3 +18,4 @@ log = "0.4"
 
 [dev-dependencies]
 n64-gbi = { git = "https://github.com/Auxnon/fast3d-rs", rev = "ddcb5e3" }
+png = "0.18"

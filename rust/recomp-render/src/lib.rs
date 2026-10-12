@@ -17,6 +17,7 @@
 
 pub mod context;
 pub mod diag;
+pub mod dump;
 pub mod rdram;
 pub mod surface;
 pub mod vi;

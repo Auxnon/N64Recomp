@@ -77,6 +77,29 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
     (Linux). A golden corpus recorded from MSVC builds would differ wherever the C++ sorts
     or iterates an unordered container.
 
+- **Phase 2a (done in the fast3d-rs fork):** branch `recomp-mm` of
+  [Auxnon/fast3d-rs](https://github.com/Auxnon/fast3d-rs/tree/recomp-mm), 7 commits on
+  upstream `ac29ed3`. Each commit keeps upstream's full test suite passing (723 tests here;
+  the only 2 failures are the same driver-rounding failures upstream has on this machine):
+  - **F3DZEX2** (`Microcode::F3dzex2`): `G_BRANCH_W`, point lights in the RSP shader (RT64's
+    formula: the RSP's `x² + y² + 2z²` distance, N·L ×4, wrapped attenuation), and no
+    near-plane clipping (depth clamped per vertex rather than per fragment).
+  - **F3DEX2 commands that used to reject the frame:** `G_MV_MATRIX`, `G_MW_FORCEMTX`,
+    `G_MW_MATRIX` and `G_MW_LIGHTCOL`.
+  - **Detecting the microcode** from the version string in its data segment
+    (`detect_microcode_from_data`).
+  - **Switching microcodes mid-list** with `G_LOAD_UCODE` (F3DZEX2 → S2DEX2 → F3DZEX2, as
+    Zelda does).
+  - **S2DEX2** (`Microcode::S2dex2`): backgrounds (`BG_COPY` and `BG_1CYC`, with RT64's TMEM
+    slicing, and one framebuffer-sampling rectangle when the image is a framebuffer) and
+    `OBJ_LOADTXTR`. Sprite and object-rectangle drawing aren't implemented, as in RT64.
+  - **RT64's extended GBI:** the hook, `gEXVertex`, extended texture and fill rectangles,
+    viewport and scissor, all push/pop state, near clipping and force-branch.
+    Interpolation and widescreen commands are no-ops. `gEXVertexZTest` drops the geometry
+    it guards, because it needs a depth readback.
+  - Still open: verifying against RT64 frames (needs Phase 2b, or a Linux port of
+    `tools/rt64-oracle`), and sending the commits upstream.
+
 ## Target games
 
 1. **Zelda 64 first: proven ground.** [Zelda64Recomp](https://github.com/Zelda64Recomp/Zelda64Recomp)

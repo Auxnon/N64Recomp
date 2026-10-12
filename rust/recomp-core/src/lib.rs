@@ -4,3 +4,5 @@
 
 pub mod cxx_fmt;
 pub mod cxx_hash;
+pub mod cxx_path;
+pub mod cxx_sort;

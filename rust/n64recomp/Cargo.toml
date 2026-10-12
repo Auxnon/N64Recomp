@@ -1,0 +1,18 @@
+[package]
+name = "n64recomp"
+description = "Rust port of N64Recomp: statically recompiles N64 MIPS code to C"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "N64Recomp"
+path = "src/main.rs"
+
+[dependencies]
+recomp-core = { path = "../recomp-core" }
+# The lib/rabbitizer submodule itself, so decoding and disassembly match the C++ tools.
+rabbitizer = { path = "../../lib/rabbitizer" }
+toml = "0.9"

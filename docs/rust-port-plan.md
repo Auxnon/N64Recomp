@@ -39,23 +39,43 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
   - `GuestMemory` matches `MEM_*`, `LD`/`SD` and LWL/LWR/SWL/SWR/LDL/LDR/SDL/SDR over
     200k random operations, compared against `recomp.h` (`rust/recomp-abi-ctest`).
   - A `recomp_export!` / `GameFn` round trip works: Rust calls C, and C calls Rust.
-- **Phase 4 (started):** `rust/rsp-recomp` is a port of RSPRecomp, and the binary it builds
-  is also named `RSPRecomp`.
-  - Its output matches the golden corpus (`aspMain`, `njpgdspMain`).
-  - MM's configs never use overlay slots or `unsupported_instructions`. For those,
-    `rust/golden/rsp-diff.sh` runs the C++ and Rust tools on synthetic configs and checks
-    that their output is identical. The configs have 2×3 and 3 overlay permutations, plus
-    resume labels including delay slots.
-  - It uses the `lib/rabbitizer` submodule as a path dependency, so decoding and disassembly
-    compile from the exact sources the C++ tools use.
-  - `rust/recomp-core` holds the pieces the tools share:
-    - `cxx_hash`: unordered map and set types that iterate in libstdc++'s order, since the
-      C++ output depends on `std::unordered_*` iteration. `recomp-core-ctest` checks it
-      against the real containers.
-    - `cxx_fmt`: {fmt}'s `{:#X}`, which writes `0X` and puts the sign in front, e.g. `-0X10`.
+- **Phase 4 (steps 1–4 done):** both recompilers are ported, and with only the Rust tools
+  the golden corpus matches (all 348 files).
+  - `rust/n64recomp` builds `N64Recomp`. It ports config and symbol-file loading, ELF
+    input (with a small ELF32 reader in place of ELFIO), mdebug, jump table analysis,
+    recompilation, the `Generator` trait with `CGenerator`, and the CLI. It runs as fast
+    as the C++ (1.5 s for MM) and peaks at about twice the memory, because it buffers each
+    output file.
+  - `rust/rsp-recomp` builds `RSPRecomp`.
+  - The golden corpus doesn't reach every path, so two scripts run the C++ and Rust tools
+    side by side and require identical output, stderr and exit status:
+    - `rust/golden/n64recomp-diff.sh` (10 cases):
+      - MM variants: one file per function, trace mode, hooks, renames, static functions
+        from removed symbols, and ambiguous calls from a duplicated section.
+      - MM's patches ELF with batched output, a size override, a manual function and
+        `--dump-context`.
+      - Gauntlet's config, and Gauntlet decomp ELFs in ELF mode and dumped.
+      - A generated ELF with a real `.mdebug` section (`testdata/make_mdebug_elf.py`); no
+        IDO-built ELF was available.
+    - `rust/golden/rsp-diff.sh`: overlay slots and `unsupported_instructions`.
+  - Both tools use the `lib/rabbitizer` submodule as a path dependency, so decoding and
+    disassembly compile from the exact sources the C++ tools use.
+  - The C++ output depends on libstdc++ and {fmt} behavior, which `rust/recomp-core`
+    reproduces. `recomp-core-ctest` checks each piece against the real library:
+    - `cxx_hash`: `std::unordered_*` iteration order.
+    - `cxx_sort`: `std::sort`'s order for equal elements, which decides which of two relocs
+      at the same address applies. The test includes McIlroy's adversary inputs, to reach
+      the heapsort fallback.
+    - `cxx_path`: `std::filesystem` `stem`/`replace_extension`; the ROM name in `lookup.cpp`
+      is `".z64"` when there is no ELF path.
+    - `cxx_fmt`: `{:#X}`, which prints `0X1F` and `-0X10`.
+  - Known gaps:
+    - Error text for a malformed TOML file differs (the exit status matches).
+    - Paths unreachable from the CLI aren't tested: `REF_` reloc tagging and the mod
+      dependency/import tables. Those belong with RecompModTool (step 5).
   - Byte-identical output assumes the reference tools were built against libstdc++
-    (Linux). A golden corpus recorded from MSVC builds would differ wherever the C++
-    iterates an unordered container.
+    (Linux). A golden corpus recorded from MSVC builds would differ wherever the C++ sorts
+    or iterates an unordered container.
 
 ## Target games
 
@@ -233,26 +253,30 @@ Every phase has an exit check. Don't start the next phase until it passes.
 
 Each step has to produce **byte-identical** output against the phase 0 corpus.
 
-1. `recomp-core` foundations:
+1. ✅ Foundations (`rust/n64recomp`; the libstdc++/{fmt} equivalents are in `rust/recomp-core`):
    - `operations.{h,cpp}` tables
    - `context.h` types
-   - `config.cpp` (`toml` + `serde`)
-   - `symbol_lists.cpp`
-   - `elf.cpp` and the symbol-file loader (`object` crate)
+   - `config.cpp` (the `toml` crate, with toml++'s conversions in `tomlx.rs`)
+   - `symbol_lists.cpp` (generated from the C++ source by `build.rs`)
+   - `elf.cpp` and the symbol-file loader (a small ELF32 reader, not the `object` crate,
+     to keep ELFIO's exact behavior)
    - `mdebug.{h,cpp}`
-2. `analysis.cpp` (jump tables), `recompilation.cpp`, and `Generator` as a trait with
+2. ✅ `analysis.cpp` (jump tables), `recompilation.cpp`, and `Generator` as a trait with
    `CGenerator` as its first implementation.
-3. The `n64recomp` binary (`src/main.cpp`). **Exit:** output for MM's configs and
+3. ✅ The `N64Recomp` binary (`src/main.cpp`). Output for MM's configs and
    `gauntlet.us.toml` is identical.
-4. `rsp-recomp` (`RSPRecomp/src/rsp_recomp.cpp`). Check it against MM's RSP outputs. It also
-   unblocks Gauntlet's audio (`aspMain`).
+4. ✅ `RSPRecomp` (`RSPRecomp/src/rsp_recomp.cpp`), checked against MM's RSP outputs. It
+   also unblocks Gauntlet's audio (`aspMain`).
 5. `RecompModTool`, `RecompModMerger`, `OfflineModRecomp`, only once mods are in scope.
 6. `LiveRecomp` on cranelift, last.
 
 Notes:
-- Use the `rabbitizer` crate, pinned to the version that matches the `lib/rabbitizer`
-  submodule (`e0d8003`), so instruction decoding doesn't drift.
-- Upstream N64Recomp keeps changing. Port each upstream commit and add a golden case for it.
+- The `lib/rabbitizer` submodule (`e0d8003`, rabbitizer 1.7.10) is a Cargo package itself,
+  so the tools use it as a path dependency and instruction decoding can't drift.
+- Upstream N64Recomp keeps changing. Port each upstream commit and add a golden or
+  differential case for it.
+- To switch Zelda64Recomp's build to the Rust tools, copy `rust/target/release/N64Recomp`
+  and `RSPRecomp` into its root, as `BUILDING.md` does for the C++ ones.
 
 ### Phase 5: the runtime (months, one module at a time)
 

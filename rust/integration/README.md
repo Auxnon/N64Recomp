@@ -18,6 +18,8 @@ These are the steps used to build Zelda64Recomp (`b65c482`, Majora's Mask US) ag
      - Downgrades clang 22's `-Wincompatible-pointer-types` error in `patches/Makefile`.
      - Drops `-static-libstdc++`, because Fedora doesn't install `libstdc++.a` by default.
      - With `RECOMP_RUST_FAST3D` as well, adds the fast3d renderer (see below).
+     - Guards three UI calls the game makes without the menus (graphics-options refresh,
+       fullscreen toggle, mouse activation) and quits directly on window close under fast3d.
    - `runtime.patch` (N64ModernRuntime): behind `RECOMP_RUST_RUNTIME`, removes the C++
      functions the Rust crate replaces and registers RDRAM with
      `recomp_abi_install_guest_memory`.

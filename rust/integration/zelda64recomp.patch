@@ -49,6 +49,32 @@ index a90db97..2d6f47c 100644
  CPPFLAGS := -nostdinc -D_LANGUAGE_C -DMIPS -I dummy_headers -I ../lib/mm-decomp/include -I ../lib/mm-decomp/src -I ../lib/mm-decomp/assets -I../lib/rt64/include
  LDFLAGS  := -nostdlib -T patches.ld -T syms.ld -Map patches.map --unresolved-symbols=ignore-all --emit-relocs
  
+diff --git a/src/game/input.cpp b/src/game/input.cpp
+index f06a5b1..b985974 100644
+--- a/src/game/input.cpp
++++ b/src/game/input.cpp
+@@ -1,4 +1,7 @@
+ #include <atomic>
++#ifdef RECOMP_FAST3D
++#include "fast3d_render_context.hpp"
++#endif
+ #include <mutex>
+ 
+ #include "ultramodern/ultramodern.hpp"
+@@ -160,6 +163,13 @@ bool sdl_event_filter(void* userdata, SDL_Event* event) {
+             return true;
+         }
+ 
++#ifdef RECOMP_FAST3D
++        // fast3d has no UI to show the prompt in.
++        if (recomp_render::fast3d_requested()) {
++            ultramodern::quit();
++            return true;
++        }
++#endif
+         zelda64::open_quit_game_prompt();
+         recompui::activate_mouse();
+         break;
 diff --git a/src/main/rt64_render_context.cpp b/src/main/rt64_render_context.cpp
 index 2eff6f8..975b42e 100644
 --- a/src/main/rt64_render_context.cpp
@@ -83,3 +109,42 @@ index 2eff6f8..975b42e 100644
      return std::make_unique<zelda64::renderer::RT64Context>(rdram, window_handle, developer_mode);
  }
  
+diff --git a/src/ui/ui_config.cpp b/src/ui/ui_config.cpp
+index 6832b22..25ace07 100644
+--- a/src/ui/ui_config.cpp
++++ b/src/ui/ui_config.cpp
+@@ -1007,13 +1007,18 @@ void recompui::update_supported_options() {
+     
+     new_options = ultramodern::renderer::get_graphics_config();
+ 
+-    graphics_model_handle.DirtyAllVariables();
++    // The UI doesn't exist when a renderer without RT64's render hooks (fast3d) is used.
++    if (graphics_model_handle) {
++        graphics_model_handle.DirtyAllVariables();
++    }
+ }
+ 
+ void recompui::toggle_fullscreen() {
+     new_options.wm_option = (new_options.wm_option == ultramodern::renderer::WindowMode::Windowed) ? ultramodern::renderer::WindowMode::Fullscreen : ultramodern::renderer::WindowMode::Windowed;
+     apply_graphics_config();
+-    graphics_model_handle.DirtyVariable("wm_option");
++    if (graphics_model_handle) {
++        graphics_model_handle.DirtyVariable("wm_option");
++    }
+ }
+ 
+ void recompui::set_config_tab(ConfigTab tab) {
+diff --git a/src/ui/ui_state.cpp b/src/ui/ui_state.cpp
+index 1941c5c..d3ad53d 100644
+--- a/src/ui/ui_state.cpp
++++ b/src/ui/ui_state.cpp
+@@ -544,6 +544,9 @@ void recompui::set_cont_active(bool active) {
+ }
+ 
+ void recompui::activate_mouse() {
++    if (!ui_state) {
++        return;
++    }
+     ui_state->update_primary_input(true, false);
+     ui_state->update_focus(true, false);
+ }

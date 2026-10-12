@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 #include <SDL.h>
 #include <SDL_syswm.h>
@@ -30,7 +31,8 @@ namespace {
 
 class Fast3dContext final : public ultramodern::renderer::RendererContext {
 public:
-    explicit Fast3dContext(ultramodern::renderer::WindowHandle window_handle) : window(window_handle) {
+    Fast3dContext(ultramodern::renderer::WindowHandle window_handle, std::function<void()> on_first_screen_update)
+        : window(window_handle), on_first_screen_update(std::move(on_first_screen_update)) {
         setup_result = ultramodern::renderer::SetupResult::GraphicsDeviceNotFound;
         chosen_api = ultramodern::renderer::GraphicsApi::Vulkan;
 
@@ -102,6 +104,9 @@ public:
     }
 
     void update_screen() override {
+        if (on_first_screen_update) {
+            std::exchange(on_first_screen_update, nullptr)();
+        }
         RecompRenderViRegs vi;
         std::memcpy(&vi, ultramodern::renderer::get_vi_regs(), sizeof(vi));
         int width = 0;
@@ -127,6 +132,7 @@ public:
 
 private:
     SDL_Window* window;
+    std::function<void()> on_first_screen_update;
     bool created = false;
 };
 
@@ -138,6 +144,6 @@ bool recomp_render::fast3d_requested() {
 }
 
 std::unique_ptr<ultramodern::renderer::RendererContext> recomp_render::create_fast3d_context(
-    ultramodern::renderer::WindowHandle window_handle) {
-    return std::make_unique<Fast3dContext>(window_handle);
+    ultramodern::renderer::WindowHandle window_handle, std::function<void()> on_first_screen_update) {
+    return std::make_unique<Fast3dContext>(window_handle, std::move(on_first_screen_update));
 }

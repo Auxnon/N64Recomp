@@ -74,7 +74,7 @@ so RT64 stays available for comparison.
 What to expect:
 
 - **No menus.** Zelda64Recomp draws its launcher and settings with RmlUi through RT64's
-  render hooks, which fast3d doesn't have. With fast3d the game starts immediately, using
+  render hooks, which fast3d doesn't have. With fast3d the game starts on the first screen update, using
   the ROM chosen earlier from the RT64 launcher, so run the RT64 build once first.
 - **Output on stderr**, prefixed `[fast3d]`:
   - the adapter and each microcode the game loads;

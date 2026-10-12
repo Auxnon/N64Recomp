@@ -1,5 +1,5 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index 1cdda09..a778994 100644
+index 1cdda09..9a6d238 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
 @@ -63,6 +63,14 @@ target_compile_definitions(rmlui_core PRIVATE LUNASVG_BUILD_STATIC)
@@ -26,6 +26,16 @@ index 1cdda09..a778994 100644
  endif()
  
  target_link_libraries(Zelda64Recompiled PRIVATE
+@@ -409,4 +417,9 @@ target_sources(Zelda64Recompiled PRIVATE ${GENERATED_NRM_SOURCES})
+ 
+ target_sources(Zelda64Recompiled PRIVATE ${SOURCES})
+ 
++# fast3d-rs renderer, selected at runtime with RECOMP_RENDERER=fast3d.
++if (RECOMP_RUST_RUNTIME AND RECOMP_RUST_FAST3D)
++    recomp_add_fast3d_renderer(Zelda64Recompiled)
++endif()
++
+ set_property(TARGET Zelda64Recompiled PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
 diff --git a/patches/Makefile b/patches/Makefile
 index a90db97..2d6f47c 100644
 --- a/patches/Makefile
@@ -38,4 +48,38 @@ index a90db97..2d6f47c 100644
 +			-Wall -Wextra -Wno-incompatible-library-redeclaration -Wno-unused-parameter -Wno-unknown-pragmas -Wno-unused-variable -Wno-missing-braces -Wno-unsupported-floating-point-opt -Wno-error=incompatible-pointer-types
  CPPFLAGS := -nostdinc -D_LANGUAGE_C -DMIPS -I dummy_headers -I ../lib/mm-decomp/include -I ../lib/mm-decomp/src -I ../lib/mm-decomp/assets -I../lib/rt64/include
  LDFLAGS  := -nostdlib -T patches.ld -T syms.ld -Map patches.map --unresolved-symbols=ignore-all --emit-relocs
+ 
+diff --git a/src/main/rt64_render_context.cpp b/src/main/rt64_render_context.cpp
+index 2eff6f8..975b42e 100644
+--- a/src/main/rt64_render_context.cpp
++++ b/src/main/rt64_render_context.cpp
+@@ -15,6 +15,11 @@
+ #include "recomp_ui.h"
+ #include "concurrentqueue.h"
+ 
++#ifdef RECOMP_FAST3D
++#include "fast3d_render_context.hpp"
++#include "librecomp/game.hpp"
++#endif
++
+ static RT64::UserConfiguration::Antialiasing device_max_msaa = RT64::UserConfiguration::Antialiasing::None;
+ static bool sample_positions_supported = false;
+ static bool high_precision_fb_enabled = false;
+@@ -448,6 +453,17 @@ RT64::UserConfiguration::Antialiasing zelda64::renderer::RT64MaxMSAA() {
+ }
+ 
+ std::unique_ptr<ultramodern::renderer::RendererContext> zelda64::renderer::create_render_context(uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, bool developer_mode) {
++#ifdef RECOMP_FAST3D
++    if (recomp_render::fast3d_requested()) {
++        // The menus are drawn through RT64's render hooks, so with fast3d there is no
++        // launcher to click through: start the game right away.
++        auto context = recomp_render::create_fast3d_context(window_handle);
++        if (context->valid()) {
++            recomp::start_game(u8"mm.n64.us.1.0");
++        }
++        return context;
++    }
++#endif
+     return std::make_unique<zelda64::renderer::RT64Context>(rdram, window_handle, developer_mode);
+ }
  

@@ -1,0 +1,20 @@
+[package]
+name = "recomp-render"
+description = "fast3d-rs renderer for recompiled games: guest memory adapter, VI mapping and the C entry points"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+# wgpu 29 needs a newer compiler than the rest of the workspace.
+rust-version = "1.88"
+
+[dependencies]
+recomp-abi = { path = "../recomp-abi" }
+fast3d = { git = "https://github.com/Auxnon/fast3d-rs", rev = "3b6493c" }
+wgpu = "29.0"
+raw-window-handle = "0.6"
+pollster = "0.3"
+log = "0.4"
+
+[dev-dependencies]
+n64-gbi = { git = "https://github.com/Auxnon/fast3d-rs", rev = "3b6493c" }

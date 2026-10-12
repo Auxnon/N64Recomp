@@ -100,6 +100,21 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
   - Still open: verifying against RT64 frames (needs Phase 2b, or a Linux port of
     `tools/rt64-oracle`), and sending the commits upstream.
 
+- **Phase 2b (in progress):** `rust/recomp-render` puts fast3d behind ultramodern's
+  `RendererContext` (`rust/integration/README.md`, "The fast3d renderer").
+  - `RecompRdram` implements fast3d's `Rdram` over `GuestMemory`: word loads reassembled in
+    guest byte order, RT64's segment and mask rules, and KSEG0 pointers (extended RDRAM,
+    always on) mapping to `address - 0x80000000`, which reaches the mod heap above 8 MB.
+  - Each task's microcode is identified from its `ucode_data` version string and cached.
+  - VI registers become fast3d's scanout; the field-origin line is taken off `VI_ORIGIN`.
+  - Diagnostics are counted by kind and printed on stderr: the Phase 3 backlog.
+  - Built into `recomp-runtime`'s static library behind the `fast3d` feature
+    (`-DRECOMP_RUST_FAST3D=ON`); `RECOMP_RENDERER=fast3d` selects it at startup. Zelda's
+    menus need RT64's render hooks, so with fast3d the game starts straight away.
+  - Checked without a GPU: fast3d walks a display list in recomp RDRAM exactly as in its
+    own big-endian image, also with KSEG0 pointers (`recomp-render/tests/walk.rs`).
+  - Unsafe: creating the surface from SDL's window handles (`surface.rs`, budget item 4).
+
 ## Target games
 
 1. **Zelda 64 first: proven ground.** [Zelda64Recomp](https://github.com/Zelda64Recomp/Zelda64Recomp)

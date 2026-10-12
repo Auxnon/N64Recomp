@@ -96,9 +96,14 @@ impl<'m> GuestMemory<'m> {
     fn store_bits(&self, offset: u64, shift: u32, width: u32, value: u32) {
         let mask = ((1u64 << width) - 1) as u32;
         let word = self.word(offset);
-        let _ = word.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |old| {
-            Some((old & !(mask << shift)) | ((value & mask) << shift))
-        });
+        let mut old = word.load(Ordering::Relaxed);
+        loop {
+            let new = (old & !(mask << shift)) | ((value & mask) << shift);
+            match word.compare_exchange_weak(old, new, Ordering::Relaxed, Ordering::Relaxed) {
+                Ok(_) => break,
+                Err(current) => old = current,
+            }
+        }
     }
 
     // MEM_W

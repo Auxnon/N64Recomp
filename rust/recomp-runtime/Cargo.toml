@@ -12,3 +12,8 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 recomp-abi = { path = "../recomp-abi" }
+recomp-render = { path = "../recomp-render", optional = true }
+
+[features]
+# The fast3d-rs renderer (rust/recomp-render).
+fast3d = ["dep:recomp-render"]

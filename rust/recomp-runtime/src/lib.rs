@@ -10,3 +10,8 @@
 #![deny(unsafe_code)]
 
 pub mod ultra;
+
+/// The fast3d renderer's C entry points (`recomp_render_fast3d_*`), linked into the same
+/// static library so the game links one copy of Rust's std.
+#[cfg(feature = "fast3d")]
+pub use recomp_render;

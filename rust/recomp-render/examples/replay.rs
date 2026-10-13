@@ -182,7 +182,7 @@ fn main() {
     .expect("no adapter");
     println!("adapter: {}", adapter.get_info().name);
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
-        required_features: adapter.features() & wgpu::Features::DUAL_SOURCE_BLENDING,
+        required_features: adapter.features() & fast3d::OPTIONAL_FEATURES,
         ..Default::default()
     }))
     .expect("no device");

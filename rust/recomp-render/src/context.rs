@@ -144,7 +144,7 @@ impl Fast3dContext {
         let info = adapter.get_info();
         eprintln!("[fast3d] adapter: {} ({:?})", info.name, info.backend);
 
-        let required_features = adapter.features() & wgpu::Features::DUAL_SOURCE_BLENDING;
+        let required_features = adapter.features() & fast3d::OPTIONAL_FEATURES;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("recomp-render"),
             required_features,

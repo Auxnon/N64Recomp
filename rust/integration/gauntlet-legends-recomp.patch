@@ -1,0 +1,55 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index d73f863..3cec42a 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -18,6 +18,15 @@ add_compile_definitions(HLSL_CPU RT64_SDL_WINDOW_VULKAN)
+ 
+ add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
+ add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
++
++# Rust port (github.com/Auxnon/N64Recomp, branch rust-port): replace runtime functions with
++# the Rust versions from rust/recomp-runtime. Needs rust/integration/runtime.patch applied to
++# lib/N64ModernRuntime.
++option(RECOMP_RUST_RUNTIME "Link the Rust runtime crate from the n64recomp checkout" OFF)
++if (RECOMP_RUST_RUNTIME)
++    include(${CMAKE_SOURCE_DIR}/../n64recomp/rust/integration/RecompRustRuntime.cmake)
++    recomp_link_rust_runtime(librecomp)
++endif()
+ target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/rt64/src)
+ # RT64 builds with -Werror; newer clang warns in its vendored ImGui.
+ target_compile_options(rt64 PRIVATE -Wno-error)
+@@ -77,3 +86,8 @@ target_link_libraries(GauntletRecompiled PRIVATE
+     ${CMAKE_DL_LIBS}
+     -latomic
+ )
++
++# fast3d-rs renderer, selected at runtime with RECOMP_RENDERER=fast3d.
++if (RECOMP_RUST_RUNTIME AND RECOMP_RUST_FAST3D)
++    recomp_add_fast3d_renderer(GauntletRecompiled)
++endif()
+diff --git a/src/rt64_context.cpp b/src/rt64_context.cpp
+index b84395b..03aec85 100644
+--- a/src/rt64_context.cpp
++++ b/src/rt64_context.cpp
+@@ -14,6 +14,10 @@
+ 
+ #include "rt64_context.h"
+ 
++#ifdef RECOMP_FAST3D
++#include "fast3d_render_context.hpp"
++#endif
++
+ static RT64::UserConfiguration::Antialiasing device_max_msaa = RT64::UserConfiguration::Antialiasing::None;
+ static bool sample_positions_supported = false;
+ static bool high_precision_fb_enabled = false;
+@@ -368,5 +372,10 @@ float gauntlet::RT64Context::get_resolution_scale() const {
+     }
+ }
+ std::unique_ptr<ultramodern::renderer::RendererContext> gauntlet::create_render_context(uint8_t* rdram, ultramodern::renderer::WindowHandle window_handle, bool developer_mode) {
++#ifdef RECOMP_FAST3D
++    if (recomp_render::fast3d_requested()) {
++        return recomp_render::create_fast3d_context(window_handle);
++    }
++#endif
+     return std::make_unique<gauntlet::RT64Context>(rdram, window_handle, developer_mode);
+ }

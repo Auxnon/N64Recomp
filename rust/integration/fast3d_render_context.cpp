@@ -92,12 +92,13 @@ public:
     void enable_instant_present() override {}
 
     void send_dl(const OSTask* task) override {
+        // The pointer fields are guest addresses stored as int32_t (PTR).
         RecompRenderGfxTask gfx{
-            task->t.ucode,
+            static_cast<uint32_t>(task->t.ucode),
             task->t.ucode_size,
-            task->t.ucode_data,
+            static_cast<uint32_t>(task->t.ucode_data),
             task->t.ucode_data_size,
-            task->t.data_ptr,
+            static_cast<uint32_t>(task->t.data_ptr),
             task->t.data_size,
         };
         recomp_render_fast3d_send_dl(gfx);

@@ -85,3 +85,22 @@ What to expect:
   with `MemoryRead` diagnostics points at an address problem.
 - The window is created by SDL on X11 or Wayland. Graphics settings, resolution scaling,
   widescreen and frame interpolation are ignored.
+
+### Gauntlet Legends
+
+`gauntlet-legends-recomp.patch` does the same for the Gauntlet Legends spike
+(`../gauntlet-legends-recomp`, which pins the same N64ModernRuntime commit as Zelda64Recomp):
+the two CMake options, and `gauntlet::create_render_context` returning fast3d when asked.
+
+```sh
+cd ../gauntlet-legends-recomp
+git apply ../n64recomp/rust/integration/gauntlet-legends-recomp.patch
+git -C lib/N64ModernRuntime apply ../../../n64recomp/rust/integration/runtime.patch
+CC=clang CXX=clang++ cmake -S . -B build-fast3d -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DRECOMP_RUST_RUNTIME=ON -DRECOMP_RUST_FAST3D=ON
+cmake --build build-fast3d -j6
+RECOMP_RENDERER=fast3d ./build-fast3d/GauntletRecompiled ../gauntlet-legends/files/baserom.z64
+```
+
+Gauntlet starts itself from its VI callback, so nothing waits for the first screen update.
+Its microcode identifies as `F3DEX fifo 2.06`, which fast3d runs as F3DEX2.

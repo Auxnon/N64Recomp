@@ -116,7 +116,7 @@ fn math_routines_match_the_cpp() {
     for step in 0..200_000 {
         // Mostly random registers, sometimes edge values in each argument.
         let pick = |rng: &mut Rng| {
-            if rng.next() % 4 == 0 {
+            if rng.next().is_multiple_of(4) {
                 EDGES[(rng.next() % EDGES.len() as u64) as usize]
             } else {
                 rng.next()

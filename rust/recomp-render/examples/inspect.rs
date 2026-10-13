@@ -5,14 +5,13 @@
 //! cargo run -p recomp-render --example inspect -- <dump dir> <frame> [task]
 //! ```
 //!
-//! Set `ALL=1` to print every command. `fast3d::inspect::walk` stops after 4,096 commands,
-//! which is short of a full Majora's Mask frame.
+//! Set `ALL=1` to print every command.
 
 use std::ops::ControlFlow;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicU32;
 
-use fast3d::inspect::{WalkObserver, WalkStep, walk};
+use fast3d::inspect::{WalkObserver, WalkStep, walk_with_limit};
 use fast3d::{DataFormat, Microcode};
 use recomp_abi::GuestMemory;
 use recomp_render::rdram::RecompRdram;
@@ -117,11 +116,12 @@ fn main() {
         tris: 0,
         last_tris: 0,
     };
-    let summary = walk(
+    let summary = walk_with_limit(
         rdram,
         u64::from(data_ptr & 0x1FFF_FFFF),
         Microcode::F3dzex2,
         DataFormat::Fixed,
+        1 << 20,
         &mut outline,
     );
     outline.flush();

@@ -20,10 +20,10 @@ const CART_HANDLE: u64 = 0x80_0000;
 
 #[test]
 fn pi_exports_match_the_cpp() {
-    let mut rng = Rng(0x5EED_0F_D1A);
+    let mut rng = Rng(0x0005_EED0_FD1A);
     let pair = Pair::new(&mut rng, WORDS);
     unsafe { ctest_set_save_type(5) }; // AllowAll, so SRAM is allowed
-    let rom: Vec<u8> = (0..ROM_SIZE).map(|_| rng.next() as u8).collect();
+    let rom: Vec<u8> = (0..ROM_SIZE).map(|_| rng.next_u64() as u8).collect();
     unsafe { ctest_set_rom(rom.as_ptr(), rom.len()) };
 
     // A cartridge handle first; the DMA calls below go through it.
@@ -55,7 +55,7 @@ fn pi_exports_match_the_cpp() {
                 ctx.r[reg::A3] = u64::from(rom_offset);
                 pair.write(ctx.r[reg::SP] + 0x10, (RDRAM_BASE + dram) as u32);
                 pair.write(ctx.r[reg::SP] + 0x14, size);
-                pair.write(ctx.r[reg::SP] + 0x18, rng.next() as u32);
+                pair.write(ctx.r[reg::SP] + 0x18, rng.next_u64() as u32);
                 pair.call(
                     "osPiStartDma",
                     ref_osPiStartDma,
@@ -74,7 +74,7 @@ fn pi_exports_match_the_cpp() {
                     ),
                     _ => (UNMAPPED_HANDLE, rng.below(0x1000) as u32, rng.below(2) == 1),
                 };
-                pair.write(RDRAM_BASE + MESG + 4, rng.next() as u32);
+                pair.write(RDRAM_BASE + MESG + 4, rng.next_u64() as u32);
                 pair.write(RDRAM_BASE + MESG + 8, (RDRAM_BASE + dram) as u32);
                 pair.write(RDRAM_BASE + MESG + 12, device);
                 pair.write(RDRAM_BASE + MESG + 16, size);

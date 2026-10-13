@@ -14,7 +14,7 @@ pub type RustFn = extern "C" fn(*mut u8, *mut RecompContext);
 pub struct Rng(pub u64);
 
 impl Rng {
-    pub fn next(&mut self) -> u64 {
+    pub fn next_u64(&mut self) -> u64 {
         self.0 ^= self.0 >> 12;
         self.0 ^= self.0 << 25;
         self.0 ^= self.0 >> 27;
@@ -22,7 +22,7 @@ impl Rng {
     }
 
     pub fn below(&mut self, n: u64) -> u64 {
-        self.next() % n
+        self.next_u64() % n
     }
 }
 
@@ -43,7 +43,7 @@ pub fn copy(ctx: &RecompContext) -> RecompContext {
 pub fn context(rng: &mut Rng, stack: u64) -> RecompContext {
     let mut ctx = RecompContext::default();
     for r in &mut ctx.r[1..] {
-        *r = rng.next();
+        *r = rng.next_u64();
     }
     ctx.r[reg::SP] = RDRAM_BASE + stack;
     ctx
@@ -54,7 +54,7 @@ pub fn context(rng: &mut Rng, stack: u64) -> RecompContext {
 pub fn pointer(rng: &mut Rng, offset: u64) -> u64 {
     let address = RDRAM_BASE + offset;
     if rng.below(4) == 0 {
-        (address & 0xFFFF_FFFF) | (rng.next() << 32)
+        (address & 0xFFFF_FFFF) | (rng.next_u64() << 32)
     } else {
         address
     }
@@ -75,7 +75,7 @@ pub struct Pair {
 impl Pair {
     pub fn new(rng: &mut Rng, words: usize) -> Self {
         let reference: &'static [AtomicU32] =
-            Vec::from_iter((0..words).map(|_| AtomicU32::new(rng.next() as u32))).leak();
+            Vec::from_iter((0..words).map(|_| AtomicU32::new(rng.next_u64() as u32))).leak();
         let rust_words: &'static [AtomicU32] = Vec::from_iter(
             reference
                 .iter()

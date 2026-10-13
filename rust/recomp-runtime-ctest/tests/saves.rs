@@ -30,7 +30,7 @@ fn save_commands_match_the_cpp() {
         let second = DATA + rng.below(data_end - DATA) / 4 * 4;
         match step % 16 {
             0 => {
-                ctx.r[reg::A1] = rng.next(); // only the low byte is the block
+                ctx.r[reg::A1] = rng.next_u64(); // only the low byte is the block
                 ctx.r[reg::A2] = pointer(&mut rng, buffer);
                 if rng.below(2) == 0 {
                     pair.call(
@@ -49,7 +49,7 @@ fn save_commands_match_the_cpp() {
                 }
             }
             1 => {
-                ctx.r[reg::A1] = rng.next();
+                ctx.r[reg::A1] = rng.next_u64();
                 ctx.r[reg::A2] = pointer(&mut rng, buffer);
                 ctx.r[reg::A3] = 8 * (1 + rng.below(32));
                 if rng.below(2) == 0 {
@@ -70,7 +70,7 @@ fn save_commands_match_the_cpp() {
             }
             2 => {
                 ctx.r[reg::A2] = pointer(&mut rng, buffer);
-                ctx.r[reg::A3] = rng.next();
+                ctx.r[reg::A3] = rng.next_u64();
                 pair.call(
                     "osFlashWriteBuffer",
                     ref_osFlashWriteBuffer,
@@ -79,7 +79,7 @@ fn save_commands_match_the_cpp() {
                 );
             }
             3 => {
-                ctx.r[reg::A0] = rng.below(1024) | (rng.next() << 32);
+                ctx.r[reg::A0] = rng.below(1024) | (rng.next_u64() << 32);
                 pair.call(
                     "osFlashWriteArray",
                     ref_osFlashWriteArray,
@@ -92,7 +92,7 @@ fn save_commands_match_the_cpp() {
                 ctx.r[reg::A2] = rng.below(1024 - pages);
                 ctx.r[reg::A3] = pointer(&mut rng, buffer);
                 pair.write(ctx.r[reg::SP] + 0x10, pages as u32);
-                pair.write(ctx.r[reg::SP] + 0x14, rng.next() as u32);
+                pair.write(ctx.r[reg::SP] + 0x14, rng.next_u64() as u32);
                 pair.call(
                     "osFlashReadArray",
                     ref_osFlashReadArray,

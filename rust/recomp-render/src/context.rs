@@ -207,12 +207,17 @@ impl Fast3dContext {
             mem: self.mem,
             vi: None,
         };
-        self.renderer.process_dl(
+        let summary = self.renderer.process_dl(
             &hardware,
             task_address(task.data_ptr),
             ucode,
             &mut self.diags,
         );
+        if summary.errors > 0
+            && let Some(dump) = &mut self.dump
+        {
+            dump.task_failed(self.frames, self.mem, task);
+        }
     }
 
     pub fn update_screen(&mut self, vi: ViRegs, width: u32, height: u32) {

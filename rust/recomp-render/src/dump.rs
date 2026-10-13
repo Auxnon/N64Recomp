@@ -4,7 +4,9 @@
 //! `RECOMP_RENDER_DUMP_FRAMES` (comma-separated presented-frame numbers or `first-last`
 //! ranges, default `600`; `none` for no fixed frames). Creating a file named `now` in the
 //! directory (`touch <dir>/now`) also saves the next `RECOMP_RENDER_DUMP_COUNT` frames
-//! (default 30), for a moment that's hard to time by frame number. For
+//! (default 30), for a moment that's hard to time by frame number.
+//! `RECOMP_RENDER_DUMP_ON_ERROR=<n>` saves the first `n` tasks that report errors, for a
+//! glitch that happens once. For
 //! each graphics task in a listed frame it writes a snapshot of RDRAM taken while the task is
 //! drawn, and it appends one line per task and one for the VI registers to `frame<N>.txt`:
 //!
@@ -38,6 +40,8 @@ pub struct FrameDump {
     count: u64,
     /// The frames of the last triggered dump.
     triggered: Option<std::ops::RangeInclusive<u64>>,
+    /// Tasks with errors still to save.
+    error_budget: u32,
 }
 
 impl FrameDump {
@@ -55,6 +59,11 @@ impl FrameDump {
             );
             return None;
         }
+        let error_budget = std::env::var("RECOMP_RENDER_DUMP_ON_ERROR")
+            .ok()
+            .and_then(|count| count.parse().ok())
+            .unwrap_or(0u32)
+            .min(100);
         let count = std::env::var("RECOMP_RENDER_DUMP_COUNT")
             .ok()
             .and_then(|count| count.parse().ok())
@@ -71,6 +80,7 @@ impl FrameDump {
             task: 0,
             count,
             triggered: None,
+            error_budget,
         })
     }
 
@@ -121,6 +131,19 @@ impl FrameDump {
                 task.ucode, task.ucode_data, task.ucode_data_size, task.data_ptr, task.data_size
             ),
         );
+    }
+
+    /// Saves a task that reported errors, if the error budget allows, and records its frame's
+    /// VI registers when it's presented. Memory is unchanged since the task was drawn: the
+    /// game waits for it to finish.
+    pub fn task_failed(&mut self, frame: u64, mem: GuestMemory<'_>, task: &GfxTask) {
+        if self.error_budget == 0 || self.wants(frame) {
+            return;
+        }
+        self.error_budget -= 1;
+        self.frames.push(frame);
+        eprintln!("[fast3d] dumping frame {frame}: a task reported errors");
+        self.task(frame, mem, task);
     }
 
     /// Records the VI registers `frame` was presented with.
@@ -185,6 +208,7 @@ mod tests {
             task: 0,
             count: 2,
             triggered: None,
+            error_budget: 0,
         };
         let vi = ViRegs::default();
         dump.present(10, &vi);

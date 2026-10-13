@@ -40,6 +40,10 @@ bool recomp::eeprom_allowed() {
     auto t = get_save_type();
     return t == SaveType::Eep4k || t == SaveType::Eep16k || t == SaveType::AllowAll;
 }
+bool recomp::sram_allowed() {
+    auto t = get_save_type();
+    return t == SaveType::Sram || t == SaveType::AllowAll;
+}
 bool recomp::flashram_allowed() {
     auto t = get_save_type();
     return t == SaveType::Flashram || t == SaveType::AllowAll;
@@ -78,6 +82,7 @@ extern "C" {
     uint32_t recomp_save_type() { return save_type; }
     bool recomp_eeprom_allowed() { return recomp::eeprom_allowed(); }
     bool recomp_flashram_allowed() { return recomp::flashram_allowed(); }
+    bool recomp_sram_allowed() { return recomp::sram_allowed(); }
     int32_t recomp_flash_handle() { return recomp::flash_handle; }
     [[noreturn]] void recomp_fatal_error(const char* message) {
         fprintf(stderr, "%s\n", message);

@@ -25,6 +25,7 @@ namespace recomp {
     SaveType get_save_type();
     bool eeprom_allowed();
     bool flashram_allowed();
+    bool sram_allowed();
     constexpr int32_t flash_handle = (int32_t)0x80800050;
 }
 

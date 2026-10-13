@@ -4,6 +4,8 @@
 
 use recomp_abi::RecompContext;
 
+pub mod harness;
+
 /// A runtime function's C signature, `void f(uint8_t* rdram, recomp_context* ctx)`.
 pub type RuntimeFn = unsafe extern "C" fn(*mut u8, *mut RecompContext);
 
@@ -30,6 +32,8 @@ references! {
     ref_osPfsInitPak ref_osPfsFreeBlocks ref_osPfsAllocateFile ref_osPfsDeleteFile
     ref_osPfsFileState ref_osPfsFindFile ref_osPfsReadWriteFile ref_osPfsChecker
     ref_osPfsNumFiles ref_osPfsRepairId
+    ref___osPiGetAccess ref___osPiRelAccess ref_osCartRomInit ref_osDriveRomInit
+    ref_osCreatePiManager ref_osPiStartDma ref_osEPiStartDma ref_osEPiReadIo ref_osPiGetStatus
 }
 
 /// The size of each stand-in save buffer in `c/save_backend.cpp`.
@@ -38,6 +42,8 @@ pub const SAVE_BUFFER_SIZE: usize = 0x20000;
 unsafe extern "C" {
     /// Sets the save type both backends report (librecomp's `recomp::SaveType` order).
     pub fn ctest_set_save_type(save_type: u32);
+    /// Gives the reference and the Rust side the same ROM.
+    pub fn ctest_set_rom(data: *const u8, len: usize);
     fn ctest_backend(use_rust: bool, buffer: *mut u8, messages: *mut i32, max: usize) -> usize;
 }
 

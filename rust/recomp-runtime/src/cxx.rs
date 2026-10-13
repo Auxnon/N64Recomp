@@ -20,6 +20,10 @@ unsafe extern "C" {
     fn recomp_eeprom_allowed() -> bool;
     fn recomp_flashram_allowed() -> bool;
     fn recomp_flash_handle() -> i32;
+    fn recomp_cart_handle() -> i32;
+    fn recomp_drive_handle() -> i32;
+    fn recomp_sram_allowed() -> bool;
+    fn recomp_rom(len: *mut usize) -> *const u8;
     fn recomp_fatal_error(message: *const c_char) -> !;
     fn osSendMesg(rdram: *mut u8, mq: i32, msg: i32, flag: i32) -> i32;
 }
@@ -56,6 +60,38 @@ pub fn eeprom_allowed() -> bool {
 pub fn flashram_allowed() -> bool {
     // SAFETY: reads the registered game's save type.
     unsafe { recomp_flashram_allowed() }
+}
+
+pub fn sram_allowed() -> bool {
+    // SAFETY: reads the registered game's save type.
+    unsafe { recomp_sram_allowed() }
+}
+
+/// The guest address of the cartridge `OSPiHandle` librecomp reserves in extended RDRAM.
+pub fn cart_handle() -> i32 {
+    // SAFETY: returns a constant.
+    unsafe { recomp_cart_handle() }
+}
+
+/// The guest address of the 64DD drive `OSPiHandle`.
+pub fn drive_handle() -> i32 {
+    // SAFETY: returns a constant.
+    unsafe { recomp_drive_handle() }
+}
+
+/// Runs `f` on the loaded ROM (empty if none). The C++ owns the bytes and only replaces them
+/// when a ROM is selected, before the game starts, so they're stable for the call.
+pub fn with_rom<R>(f: impl FnOnce(&[u8]) -> R) -> R {
+    let mut len = 0;
+    // SAFETY: returns the ROM vector's data pointer and length.
+    let data = unsafe { recomp_rom(&mut len) };
+    let rom = if data.is_null() {
+        &[][..]
+    } else {
+        // SAFETY: `len` bytes from `data` are the ROM, alive and unchanged during the call.
+        unsafe { std::slice::from_raw_parts(data, len) }
+    };
+    f(rom)
 }
 
 /// The guest address of the flash `OSPiHandle` librecomp reserves in extended RDRAM.

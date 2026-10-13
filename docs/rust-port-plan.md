@@ -358,6 +358,12 @@ Notes:
     `recomp-runtime-ctest` runs 20k random save calls through Rust and through the C++, each
     on its own guest memory and stand-in save buffer, and compares save bytes, memory,
     registers and `osSendMesg` calls after each one.
+  - Step 3a (2026-10-13): the PI exports (`osPiStartDma`, `osEPiStartDma`, `osEPiReadIo`,
+    cart/drive handles) are in `recomp-runtime/src/pi.rs`, reading the ROM librecomp loaded
+    (lent per call through `cxx::with_rom`) and SRAM through the save buffer. 3,000 random
+    PI calls run against the C++ on the same ROM. Next, 3b: the save buffer, its writer
+    thread and the `.temp`/`.bak` file handling, which C++ startup and the mod API call into.
+    Gauntlet's `boot.cpp`/`tlb.cpp` wait until its maintainer agrees.
 - At the end, switch the build so Cargo hosts it (see Layout).
 
 ### Phase 6 (optional): generating Rust instead of C

@@ -3,13 +3,10 @@
 //! random sequence of calls runs through both; after every call the save bytes, guest memory,
 //! registers and `osSendMesg` log must match.
 
-use std::sync::atomic::{AtomicU32, Ordering};
-
-use recomp_abi::{GuestMemory, RDRAM_BASE, RecompContext, install_guest_memory, reg};
+use recomp_abi::{RDRAM_BASE, reg};
 use recomp_runtime::{eep, flash, pak};
+use recomp_runtime_ctest::harness::{Pair, Rng, RustFn, pointer};
 use recomp_runtime_ctest::*;
-
-type RustFn = extern "C" fn(*mut u8, *mut RecompContext);
 
 const WORDS: usize = 16 * 1024; // 64 KB of guest memory
 /// Where the stack arguments of `osFlashReadArray` go.
@@ -17,115 +14,14 @@ const STACK: u64 = 0x100;
 /// Buffers are drawn from above this offset.
 const DATA: u64 = 0x1000;
 
-struct Rng(u64);
-impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 ^= self.0 >> 12;
-        self.0 ^= self.0 << 25;
-        self.0 ^= self.0 >> 27;
-        self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
-    }
-    fn below(&mut self, n: u64) -> u64 {
-        self.next() % n
-    }
-}
-
-fn copy(ctx: &RecompContext) -> RecompContext {
-    RecompContext {
-        r: ctx.r,
-        f: ctx.f,
-        hi: ctx.hi,
-        lo: ctx.lo,
-        f_odd: ctx.f_odd,
-        status_reg: ctx.status_reg,
-        mips3_float_mode: ctx.mips3_float_mode,
-    }
-}
-
-fn snapshot(words: &[AtomicU32]) -> Vec<u32> {
-    words.iter().map(|w| w.load(Ordering::Relaxed)).collect()
-}
-
-struct Pair {
-    reference: &'static [AtomicU32],
-    rust: &'static GuestMemory<'static>,
-    rust_words: &'static [AtomicU32],
-}
-
-impl Pair {
-    fn new(rng: &mut Rng) -> Self {
-        let fill = |rng: &mut Rng| -> &'static [AtomicU32] {
-            Vec::from_iter((0..WORDS).map(|_| AtomicU32::new(rng.next() as u32))).leak()
-        };
-        let mut seed = Rng(rng.next() | 1);
-        let reference = fill(&mut Rng(seed.next() | 1));
-        let rust_words: &'static [AtomicU32] = Vec::from_iter(
-            reference
-                .iter()
-                .map(|w| AtomicU32::new(w.load(Ordering::Relaxed))),
-        )
-        .leak();
-        let _ = fill(&mut seed);
-        assert!(install_guest_memory(GuestMemory::new(rust_words)));
-        Self {
-            reference,
-            rust: recomp_abi::guest_memory().unwrap(),
-            rust_words,
-        }
-    }
-
-    /// Writes a word into both memories.
-    fn write(&self, addr: u64, value: u32) {
-        GuestMemory::new(self.reference).write_u32(addr, value);
-        self.rust.write_u32(addr, value);
-    }
-
-    fn call(&self, name: &str, reference: RuntimeFn, rust: RustFn, ctx: &RecompContext) {
-        let mut c = copy(ctx);
-        let mut r = copy(ctx);
-        unsafe { reference(self.reference.as_ptr().cast_mut().cast(), &mut c) };
-        rust(self.rust.as_ptr(), &mut r);
-        assert_eq!(r.r, c.r, "{name}: registers from {:x?}", &ctx.r[4..8]);
-        assert!(
-            snapshot(self.rust_words) == snapshot(self.reference),
-            "{name}: guest memory from {:x?}",
-            &ctx.r[4..8]
-        );
-        let (c_save, c_messages) = backend(false);
-        let (r_save, r_messages) = backend(true);
-        assert!(
-            r_save == c_save,
-            "{name}: save bytes from {:x?}",
-            &ctx.r[4..8]
-        );
-        assert_eq!(r_messages, c_messages, "{name}: osSendMesg calls");
-    }
-}
-
-/// A guest pointer (sign-extended KSEG0) to `offset`, sometimes with junk in the upper half
-/// that the C++ drops.
-fn pointer(rng: &mut Rng, offset: u64) -> u64 {
-    let address = RDRAM_BASE + offset;
-    if rng.below(4) == 0 {
-        (address & 0xFFFF_FFFF) | (rng.next() << 32)
-    } else {
-        address
-    }
-}
-
-fn context(rng: &mut Rng) -> RecompContext {
-    let mut ctx = RecompContext::default();
-    for r in &mut ctx.r[1..] {
-        *r = rng.next();
-    }
-    ctx.r[reg::SP] = RDRAM_BASE + STACK;
-    ctx
+fn context(rng: &mut Rng) -> recomp_abi::RecompContext {
+    recomp_runtime_ctest::harness::context(rng, STACK)
 }
 
 #[test]
 fn save_commands_match_the_cpp() {
     let mut rng = Rng(0xC0FF_EE11);
-    let pair = Pair::new(&mut rng);
+    let pair = Pair::new(&mut rng, WORDS);
     unsafe { ctest_set_save_type(5) }; // AllowAll
     let data_end = WORDS as u64 * 4 - 4 * 128;
     for step in 0..20_000 {

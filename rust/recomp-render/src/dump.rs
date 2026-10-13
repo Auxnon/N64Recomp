@@ -2,7 +2,9 @@
 //!
 //! With `RECOMP_RENDER_DUMP=<dir>` set, the renderer saves the frames listed in
 //! `RECOMP_RENDER_DUMP_FRAMES` (comma-separated presented-frame numbers or `first-last`
-//! ranges, default `600`). For
+//! ranges, default `600`; `none` for no fixed frames). Creating a file named `now` in the
+//! directory (`touch <dir>/now`) also saves the next `RECOMP_RENDER_DUMP_COUNT` frames
+//! (default 30), for a moment that's hard to time by frame number. For
 //! each graphics task in a listed frame it writes a snapshot of RDRAM taken while the task is
 //! drawn, and it appends one line per task and one for the VI registers to `frame<N>.txt`:
 //!
@@ -25,11 +27,17 @@ use crate::vi::ViRegs;
 
 /// The most RDRAM saved per task: the base 8 MB plus the mod heap above `0x81000000`.
 const SNAPSHOT_LIMIT: usize = 64 << 20;
+/// The file whose creation starts a triggered dump.
+const TRIGGER: &str = "now";
 
 pub struct FrameDump {
     dir: PathBuf,
     frames: Vec<u64>,
     task: u32,
+    /// Frames saved per trigger.
+    count: u64,
+    /// The frames of the last triggered dump.
+    triggered: Option<std::ops::RangeInclusive<u64>>,
 }
 
 impl FrameDump {
@@ -47,16 +55,39 @@ impl FrameDump {
             );
             return None;
         }
-        eprintln!("[fast3d] dumping frames {frames:?} to {}", dir.display());
+        let count = std::env::var("RECOMP_RENDER_DUMP_COUNT")
+            .ok()
+            .and_then(|count| count.parse().ok())
+            .unwrap_or(30u64)
+            .min(1000);
+        eprintln!(
+            "[fast3d] dumping frames {frames:?} to {}; touch {}/{TRIGGER} to dump the next {count}",
+            dir.display(),
+            dir.display()
+        );
         Some(Self {
             dir,
             frames,
             task: 0,
+            count,
+            triggered: None,
         })
     }
 
     fn wants(&self, frame: u64) -> bool {
-        self.frames.contains(&frame)
+        self.frames.contains(&frame) || self.triggered.as_ref().is_some_and(|r| r.contains(&frame))
+    }
+
+    /// Starts a triggered dump after `frame` if the trigger file exists, removing it.
+    fn check_trigger(&mut self, frame: u64) {
+        let trigger = self.dir.join(TRIGGER);
+        if self.triggered.as_ref().is_some_and(|r| frame < *r.end()) || !trigger.exists() {
+            return;
+        }
+        let _ = fs::remove_file(&trigger);
+        let frames = frame + 1..=frame + self.count;
+        eprintln!("[fast3d] dumping frames {frames:?}");
+        self.triggered = Some(frames);
     }
 
     fn append(&self, frame: u64, line: &str) {
@@ -94,16 +125,17 @@ impl FrameDump {
 
     /// Records the VI registers `frame` was presented with.
     pub fn present(&mut self, frame: u64, vi: &ViRegs) {
-        if !self.wants(frame) {
-            return;
+        if self.wants(frame) {
+            self.task = 0;
+            let mut line = String::from("vi");
+            for value in vi.fields() {
+                let _ = write!(line, " {value:#x}");
+            }
+            self.append(frame, &line);
+            eprintln!("[fast3d] dumped frame {frame}");
         }
-        self.task = 0;
-        let mut line = String::from("vi");
-        for value in vi.fields() {
-            let _ = write!(line, " {value:#x}");
-        }
-        self.append(frame, &line);
-        eprintln!("[fast3d] dumped frame {frame}");
+        // This frame's tasks have been drawn, so a trigger starts with the next frame.
+        self.check_trigger(frame);
     }
 }
 
@@ -141,6 +173,28 @@ mod tests {
     fn frame_lists_skip_bad_entries() {
         assert_eq!(parse_frames("1, 20,x,300"), [1, 20, 300]);
         assert_eq!(parse_frames("5-7,9"), [5, 6, 7, 9]);
+    }
+
+    #[test]
+    fn trigger_dumps_the_frames_after_it() {
+        let dir = std::env::temp_dir().join(format!("recomp-dump-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let mut dump = FrameDump {
+            dir: dir.clone(),
+            frames: Vec::new(),
+            task: 0,
+            count: 2,
+            triggered: None,
+        };
+        let vi = ViRegs::default();
+        dump.present(10, &vi);
+        fs::write(dir.join(TRIGGER), "").unwrap();
+        dump.present(11, &vi);
+        assert!(!dir.join(TRIGGER).exists());
+        assert!(!dump.wants(11));
+        assert!(dump.wants(12) && dump.wants(13));
+        assert!(!dump.wants(14));
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

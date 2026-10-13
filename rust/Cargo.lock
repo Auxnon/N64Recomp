@@ -854,6 +854,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "recomp-runtime-ctest"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "recomp-abi",
+ "recomp-runtime",
+]
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"

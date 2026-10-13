@@ -15,5 +15,9 @@ recomp-abi = { path = "../recomp-abi" }
 recomp-render = { path = "../recomp-render", optional = true }
 
 [features]
+default = ["tlb-stub"]
 # The fast3d-rs renderer (rust/recomp-render).
 fast3d = ["dep:recomp-render"]
+# librecomp's empty osUnmapTLBAll. Turn off for a game that defines its own (one that
+# emulates the TLB), or the two definitions collide at link time.
+tlb-stub = []

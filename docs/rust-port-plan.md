@@ -343,6 +343,13 @@ Notes:
   5. Audio, input, config.
   6. Mods last.
 - **Exit per module:** MM (then Gauntlet) boots and the golden frames still match.
+- Progress:
+  - Step 1 (2026-10-13): `math_routines`, `print` and `ultra_stubs` are in
+    `recomp-runtime` (`math.rs`, `print.rs`, `stubs.rs`). `recomp-runtime-ctest` runs each
+    against a verbatim copy of the C++ on the same registers, including the inputs C++
+    leaves to x86 (shifts past 63, out-of-range float to `int64_t`). `osUnmapTLBAll` is
+    behind the `tlb-stub` feature (`RECOMP_RUST_TLB_STUB`), off for Gauntlet, which has its
+    own. `euc-jp` isn't ported: only commented-out code used it.
 - At the end, switch the build so Cargo hosts it (see Layout).
 
 ### Phase 6 (optional): generating Rust instead of C

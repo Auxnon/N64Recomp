@@ -103,4 +103,6 @@ RECOMP_RENDERER=fast3d ./build-fast3d/GauntletRecompiled ../gauntlet-legends/fil
 ```
 
 Gauntlet starts itself from its VI callback, so nothing waits for the first screen update.
+It emulates the TLB in `src/tlb.cpp`, which defines `osUnmapTLBAll`, so the patch sets
+`RECOMP_RUST_TLB_STUB` off and the Rust runtime leaves its empty one out.
 Its microcode identifies as `F3DEX fifo 2.06`, which fast3d runs as F3DEX2.

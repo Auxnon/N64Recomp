@@ -1,8 +1,8 @@
 diff --git a/CMakeLists.txt b/CMakeLists.txt
-index d73f863..3cec42a 100644
+index d73f863..32ea0c6 100644
 --- a/CMakeLists.txt
 +++ b/CMakeLists.txt
-@@ -18,6 +18,15 @@ add_compile_definitions(HLSL_CPU RT64_SDL_WINDOW_VULKAN)
+@@ -18,6 +18,17 @@ add_compile_definitions(HLSL_CPU RT64_SDL_WINDOW_VULKAN)
  
  add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
  add_subdirectory(${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime)
@@ -12,13 +12,15 @@ index d73f863..3cec42a 100644
 +# lib/N64ModernRuntime.
 +option(RECOMP_RUST_RUNTIME "Link the Rust runtime crate from the n64recomp checkout" OFF)
 +if (RECOMP_RUST_RUNTIME)
++    # src/tlb.cpp defines osUnmapTLBAll.
++    set(RECOMP_RUST_TLB_STUB OFF CACHE BOOL "" FORCE)
 +    include(${CMAKE_SOURCE_DIR}/../n64recomp/rust/integration/RecompRustRuntime.cmake)
 +    recomp_link_rust_runtime(librecomp)
 +endif()
  target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/rt64/src)
  # RT64 builds with -Werror; newer clang warns in its vendored ImGui.
  target_compile_options(rt64 PRIVATE -Wno-error)
-@@ -77,3 +86,8 @@ target_link_libraries(GauntletRecompiled PRIVATE
+@@ -77,3 +88,8 @@ target_link_libraries(GauntletRecompiled PRIVATE
      ${CMAKE_DL_LIBS}
      -latomic
  )

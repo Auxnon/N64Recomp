@@ -13,10 +13,18 @@ set(RECOMP_RUST_TARGET_DIR "${CMAKE_BINARY_DIR}/rust-target")
 set(RECOMP_RUST_LIB "${RECOMP_RUST_TARGET_DIR}/release/librecomp_runtime.a")
 
 option(RECOMP_RUST_FAST3D "Include the fast3d-rs renderer (rust/recomp-render) in the Rust runtime" OFF)
-set(RECOMP_RUST_FEATURES "")
-if (RECOMP_RUST_FAST3D)
-    set(RECOMP_RUST_FEATURES --features fast3d)
+# A game that emulates the TLB defines osUnmapTLBAll itself; set this OFF for it, or the
+# runtime's empty one collides with it at link time.
+option(RECOMP_RUST_TLB_STUB "Include the runtime's empty osUnmapTLBAll" ON)
+set(RECOMP_RUST_FEATURE_LIST "")
+if (RECOMP_RUST_TLB_STUB)
+    list(APPEND RECOMP_RUST_FEATURE_LIST tlb-stub)
 endif()
+if (RECOMP_RUST_FAST3D)
+    list(APPEND RECOMP_RUST_FEATURE_LIST fast3d)
+endif()
+list(JOIN RECOMP_RUST_FEATURE_LIST "," RECOMP_RUST_FEATURE_CSV)
+set(RECOMP_RUST_FEATURES --no-default-features --features "${RECOMP_RUST_FEATURE_CSV}")
 
 find_program(CARGO cargo REQUIRED)
 

@@ -9,6 +9,9 @@
 
 #![deny(unsafe_code)]
 
+pub mod math;
+pub mod print;
+pub mod stubs;
 pub mod ultra;
 
 /// The fast3d renderer's C entry points (`recomp_render_fast3d_*`), linked into the same

@@ -215,7 +215,8 @@ Which side hosts the build:
 
 ### The unsafe budget (the complete list)
 
-1. Creating the `GuestMemory` view from the runtime's pointer.
+1. Creating the `GuestMemory` view from the runtime's pointer, and reaching the address
+   range reserved around RDRAM through it (TLB-mapped pages, as the C `MEM_*` macros do).
 2. `recomp_export!`: turning `(*mut u8, *mut recomp_context)` from game code into
    `(&GuestMemory, &mut RecompContext)`. The body of every exported function is safe code.
 3. `GameFn::call`: calling an `unsafe extern "C" fn(*mut u8, *mut recomp_context)`
@@ -364,6 +365,11 @@ Notes:
     PI calls run against the C++ on the same ROM. Next, 3b: the save buffer, its writer
     thread and the `.temp`/`.bak` file handling, which C++ startup and the mod API call into.
     Gauntlet's `boot.cpp`/`tlb.cpp` wait until its maintainer agrees.
+    Gauntlet then showed 3a's tests had only used RDRAM addresses: it DMAs into its
+    TLB-mapped segment (`0xE03FF768`), which the C++ reaches through the 4 GB reservation
+    `tlb.cpp` maps pages into. `GuestMemory` now knows the reservation
+    (`recomp_abi_install_guest_memory_reserved`), the renderer stays bounded to RDRAM, and
+    the PI test DMAs past RDRAM too.
 - At the end, switch the build so Cargo hosts it (see Layout).
 
 ### Phase 6 (optional): generating Rust instead of C

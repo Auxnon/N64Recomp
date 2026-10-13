@@ -15,6 +15,6 @@ mod context;
 pub mod export;
 mod memory;
 
-pub use context::{reg, Fpr, Gpr, RecompContext};
-pub use export::{guest_memory, install_guest_memory, GameFn, RecompFunc};
-pub use memory::{sign_extend, GuestMemory, RDRAM_BASE};
+pub use context::{Fpr, Gpr, RecompContext, reg};
+pub use export::{GameFn, RecompFunc, guest_memory, install_guest_memory};
+pub use memory::{GuestMemory, RDRAM_BASE, sign_extend};

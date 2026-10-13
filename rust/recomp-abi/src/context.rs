@@ -99,7 +99,10 @@ impl RecompContext {
     /// Arguments past the fourth live on the guest stack; read those through
     /// [`crate::GuestMemory`] at `$sp + 0x10 + 4 * index`.
     pub fn arg_u32(&self, index: usize) -> u32 {
-        assert!(index < 4, "register argument index {index} out of range (0-3)");
+        assert!(
+            index < 4,
+            "register argument index {index} out of range (0-3)"
+        );
         self.r[reg::A0 + index] as u32
     }
 

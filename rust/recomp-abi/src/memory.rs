@@ -11,6 +11,8 @@
 //! loads and stores on x86-64 and ARM64. Byte and halfword stores update their word with
 //! a compare-and-swap loop so a concurrent store to a neighboring byte isn't lost.
 
+use std::marker::PhantomData;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::Gpr;
@@ -27,15 +29,43 @@ pub fn sign_extend(addr: u32) -> Gpr {
 }
 
 /// A view of guest RDRAM, borrowed for `'m`.
+///
+/// RDRAM proper (`len_bytes`) is always mapped. The runtime reserves a larger address range
+/// around it (4 GB in N64ModernRuntime) so that every 32-bit guest address has a host address;
+/// a game that emulates the TLB (Gauntlet Legends) maps pages of that range onto RDRAM. Accesses
+/// up to `reserved_bytes` reach it exactly as the C `MEM_*` macros do: a mapped page works, an
+/// unmapped one faults. The renderer and other readers that must not fault use `len_bytes`.
 #[derive(Clone, Copy, Debug)]
 pub struct GuestMemory<'m> {
-    words: &'m [AtomicU32],
+    base: NonNull<AtomicU32>,
+    rdram_words: usize,
+    reserved_words: usize,
+    _memory: PhantomData<&'m [AtomicU32]>,
 }
+
+// SAFETY: a view of atomics, shared like `&[AtomicU32]`.
+#[allow(unsafe_code)]
+unsafe impl Send for GuestMemory<'_> {}
+// SAFETY: as above.
+#[allow(unsafe_code)]
+unsafe impl Sync for GuestMemory<'_> {}
 
 impl<'m> GuestMemory<'m> {
     /// Wraps memory the caller already owns, e.g. a `Vec<AtomicU32>` in tests.
     pub fn new(words: &'m [AtomicU32]) -> Self {
-        Self { words }
+        Self::with_reserve(words, words.len())
+    }
+
+    /// Like [`Self::new`], with only the first `rdram_words` counting as RDRAM proper and the
+    /// rest of `words` standing in for the reserved range.
+    pub fn with_reserve(words: &'m [AtomicU32], rdram_words: usize) -> Self {
+        assert!(rdram_words <= words.len());
+        Self {
+            base: NonNull::from(words).cast(),
+            rdram_words,
+            reserved_words: words.len(),
+            _memory: PhantomData,
+        }
     }
 
     /// Wraps the runtime's RDRAM mapping.
@@ -47,24 +77,56 @@ impl<'m> GuestMemory<'m> {
     /// point of the atomic view), but nothing may unmap or reprotect it during `'m`.
     #[allow(unsafe_code)]
     pub unsafe fn from_raw_parts(ptr: *mut u8, len_bytes: usize) -> Self {
-        assert!(ptr.cast::<u32>().is_aligned(), "RDRAM pointer {ptr:p} is not 4-byte aligned");
-        assert!(len_bytes % 4 == 0, "RDRAM length {len_bytes:#x} is not a multiple of 4");
-        // SAFETY: the caller guarantees the range is valid for 'm. AtomicU32 has the same
-        // size and alignment as u32 and permits shared mutation.
-        let words = unsafe { std::slice::from_raw_parts(ptr.cast::<AtomicU32>(), len_bytes / 4) };
-        Self { words }
+        // SAFETY: forwarded; the reservation is just RDRAM.
+        unsafe { Self::from_reservation(ptr, len_bytes, len_bytes) }
+    }
+
+    /// Wraps the runtime's RDRAM mapping and the address range reserved around it.
+    ///
+    /// # Safety
+    ///
+    /// As [`Self::from_raw_parts`] for the first `len_bytes`. The `reserved_bytes` from `ptr`
+    /// must be one address-space reservation that stays reserved for `'m`; pages past
+    /// `len_bytes` may be unmapped, and the guest only touches those its runtime has mapped,
+    /// as recompiled C code assumes.
+    #[allow(unsafe_code)]
+    pub unsafe fn from_reservation(ptr: *mut u8, len_bytes: usize, reserved_bytes: usize) -> Self {
+        assert!(
+            ptr.cast::<u32>().is_aligned(),
+            "RDRAM pointer {ptr:p} is not 4-byte aligned"
+        );
+        assert!(
+            len_bytes % 4 == 0,
+            "RDRAM length {len_bytes:#x} is not a multiple of 4"
+        );
+        assert!(
+            len_bytes <= reserved_bytes,
+            "RDRAM is larger than its reservation"
+        );
+        Self {
+            base: NonNull::new(ptr.cast()).expect("RDRAM pointer is null"),
+            rdram_words: len_bytes / 4,
+            reserved_words: reserved_bytes / 4,
+            _memory: PhantomData,
+        }
     }
 
     /// The `uint8_t* rdram` pointer recompiled functions expect.
     pub fn as_ptr(&self) -> *mut u8 {
-        self.words.as_ptr().cast_mut().cast()
+        self.base.as_ptr().cast()
     }
 
+    /// The size of RDRAM proper, which is always mapped.
     pub fn len_bytes(&self) -> usize {
-        self.words.len() * 4
+        self.rdram_words * 4
     }
 
-    /// Whether `len` bytes from `addr` are inside this view.
+    /// The size of the address range accesses may reach (see the type's documentation).
+    pub fn reserved_bytes(&self) -> usize {
+        self.reserved_words * 4
+    }
+
+    /// Whether `len` bytes from `addr` are inside RDRAM proper.
     pub fn contains(&self, addr: Gpr, len: u64) -> bool {
         let offset = addr.wrapping_sub(RDRAM_BASE);
         offset
@@ -73,21 +135,28 @@ impl<'m> GuestMemory<'m> {
     }
 
     #[track_caller]
+    #[allow(unsafe_code)]
     fn word(&self, offset: u64) -> &AtomicU32 {
-        let index = usize::try_from(offset / 4).ok();
-        match index.and_then(|i| self.words.get(i)) {
-            Some(word) => word,
-            None => panic!(
-                "guest address {:#x} is outside RDRAM ({:#x} bytes)",
+        match usize::try_from(offset / 4) {
+            // SAFETY: inside the reservation the constructor vouched for, through the pointer
+            // it was given. RDRAM proper is always mapped; past it, the runtime has mapped the
+            // pages the guest uses (as for the C macros).
+            Ok(index) if index < self.reserved_words => unsafe { self.base.add(index).as_ref() },
+            _ => panic!(
+                "guest address {:#x} is outside RDRAM ({:#x} bytes) and its reservation ({:#x})",
                 offset.wrapping_add(RDRAM_BASE),
-                self.len_bytes()
+                self.len_bytes(),
+                self.reserved_bytes()
             ),
         }
     }
 
     #[track_caller]
     fn aligned_offset(addr: Gpr, align: u64) -> u64 {
-        assert!(addr % align == 0, "unaligned {align}-byte access at guest address {addr:#x}");
+        assert!(
+            addr % align == 0,
+            "unaligned {align}-byte access at guest address {addr:#x}"
+        );
         addr.wrapping_sub(RDRAM_BASE)
     }
 
@@ -110,12 +179,14 @@ impl<'m> GuestMemory<'m> {
 
     #[track_caller]
     pub fn read_u32(&self, addr: Gpr) -> u32 {
-        self.word(Self::aligned_offset(addr, 4)).load(Ordering::Relaxed)
+        self.word(Self::aligned_offset(addr, 4))
+            .load(Ordering::Relaxed)
     }
 
     #[track_caller]
     pub fn write_u32(&self, addr: Gpr, value: u32) {
-        self.word(Self::aligned_offset(addr, 4)).store(value, Ordering::Relaxed);
+        self.word(Self::aligned_offset(addr, 4))
+            .store(value, Ordering::Relaxed);
     }
 
     #[track_caller]
@@ -231,7 +302,10 @@ impl<'m> GuestMemory<'m> {
         let dword_addr = addr & !7;
         let shift = (addr & 7) * 8;
         let initial = self.read_u64(dword_addr);
-        self.write_u64(dword_addr, (initial & !(u64::MAX >> shift)) | (value >> shift));
+        self.write_u64(
+            dword_addr,
+            (initial & !(u64::MAX >> shift)) | (value >> shift),
+        );
     }
 
     #[track_caller]
@@ -239,7 +313,10 @@ impl<'m> GuestMemory<'m> {
         let dword_addr = addr & !7;
         let shift = 56 - (addr & 7) * 8;
         let initial = self.read_u64(dword_addr);
-        self.write_u64(dword_addr, (initial & !(u64::MAX << shift)) | (value << shift));
+        self.write_u64(
+            dword_addr,
+            (initial & !(u64::MAX << shift)) | (value << shift),
+        );
     }
 
     // Bulk copies in guest byte order (what the N64 sees at increasing addresses).
@@ -256,5 +333,24 @@ impl<'m> GuestMemory<'m> {
         for (i, &byte) in bytes.iter().enumerate() {
             self.write_u8(addr.wrapping_add(i as u64), byte);
         }
+    }
+}
+
+#[cfg(test)]
+mod reserve_tests {
+    use super::*;
+
+    /// Past RDRAM, accesses reach the reserved range (where a TLB-emulating runtime maps
+    /// pages); RDRAM-only checks stop at RDRAM; past the reservation is an error.
+    #[test]
+    fn accesses_reach_the_reservation_but_rdram_checks_do_not() {
+        let words: Vec<AtomicU32> = (0..8).map(|_| AtomicU32::new(0)).collect();
+        let mem = GuestMemory::with_reserve(&words, 4);
+        assert_eq!((mem.len_bytes(), mem.reserved_bytes()), (16, 32));
+        mem.write_u32(RDRAM_BASE + 20, 0x1234_5678);
+        assert_eq!(words[5].load(Ordering::Relaxed), 0x1234_5678);
+        assert_eq!(mem.read_u8(RDRAM_BASE + 20), 0x12);
+        assert!(!mem.contains(RDRAM_BASE + 20, 4));
+        assert!(std::panic::catch_unwind(|| mem.read_u32(RDRAM_BASE + 32)).is_err());
     }
 }

@@ -6,8 +6,11 @@ use recomp_runtime::pi;
 use recomp_runtime_ctest::harness::{Pair, Rng, RustFn, context};
 use recomp_runtime_ctest::*;
 
-/// Up to the PI handles librecomp keeps at 0x80800000, plus room past them.
-const WORDS: usize = (8 * 1024 * 1024 + 0x1000) / 4;
+/// Up to the PI handles librecomp keeps at 0x80800000, plus room past them: "RDRAM".
+const RDRAM_WORDS: usize = (8 * 1024 * 1024 + 0x1000) / 4;
+/// Past RDRAM, reserved space standing in for TLB-mapped pages (Gauntlet Legends DMAs there).
+const RESERVED: u64 = 0x2_0000;
+const WORDS: usize = RDRAM_WORDS + RESERVED as usize / 4;
 const STACK: u64 = 0x100;
 const DATA: u64 = 0x1000;
 const DATA_END: u64 = 0x10_0000;
@@ -21,7 +24,7 @@ const CART_HANDLE: u64 = 0x80_0000;
 #[test]
 fn pi_exports_match_the_cpp() {
     let mut rng = Rng(0x0005_EED0_FD1A);
-    let pair = Pair::new(&mut rng, WORDS);
+    let pair = Pair::with_reserve(&mut rng, WORDS, RDRAM_WORDS);
     unsafe { ctest_set_save_type(5) }; // AllowAll, so SRAM is allowed
     let rom: Vec<u8> = (0..ROM_SIZE).map(|_| rng.next_u64() as u8).collect();
     unsafe { ctest_set_rom(rom.as_ptr(), rom.len()) };
@@ -46,7 +49,12 @@ fn pi_exports_match_the_cpp() {
 
     for step in 0..3_000 {
         let mut ctx = context(&mut rng, STACK);
-        let dram = DATA + rng.below(DATA_END - DATA - 0x2000) / 8 * 8;
+        // Sometimes past RDRAM, in the reserved range.
+        let dram = if rng.below(4) == 0 {
+            RDRAM_WORDS as u64 * 4 + rng.below(RESERVED - 0x2000) / 8 * 8
+        } else {
+            DATA + rng.below(DATA_END - DATA - 0x2000) / 8 * 8
+        };
         let size = 2 * (1 + rng.below(0x800)) as u32;
         let rom_offset = rng.below(ROM_SIZE as u64 - u64::from(size)) as u32 & !1;
         match step % 6 {

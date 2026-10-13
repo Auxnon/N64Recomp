@@ -74,6 +74,13 @@ pub struct Pair {
 
 impl Pair {
     pub fn new(rng: &mut Rng, words: usize) -> Self {
+        Self::with_reserve(rng, words, words)
+    }
+
+    /// Like [`Self::new`], with only the first `rdram_words` as RDRAM proper on the Rust side
+    /// and the rest standing in for the reserved range around it (TLB-mapped pages). The C++
+    /// reference indexes it all as plain memory, as it does in the runtime.
+    pub fn with_reserve(rng: &mut Rng, words: usize, rdram_words: usize) -> Self {
         let reference: &'static [AtomicU32] =
             Vec::from_iter((0..words).map(|_| AtomicU32::new(rng.next_u64() as u32))).leak();
         let rust_words: &'static [AtomicU32] = Vec::from_iter(
@@ -82,7 +89,10 @@ impl Pair {
                 .map(|w| AtomicU32::new(w.load(Ordering::Relaxed))),
         )
         .leak();
-        assert!(install_guest_memory(GuestMemory::new(rust_words)));
+        assert!(install_guest_memory(GuestMemory::with_reserve(
+            rust_words,
+            rdram_words
+        )));
         Self {
             reference,
             rust: recomp_abi::guest_memory().unwrap(),

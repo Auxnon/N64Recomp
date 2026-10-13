@@ -38,6 +38,23 @@ pub unsafe extern "C" fn recomp_abi_install_guest_memory(rdram: *mut u8, len_byt
     install_guest_memory(unsafe { GuestMemory::from_raw_parts(rdram, len_bytes) })
 }
 
+/// [`recomp_abi_install_guest_memory`] for a runtime that reserves address space around RDRAM
+/// (N64ModernRuntime reserves 4 GB, so every 32-bit guest address has a host address).
+///
+/// # Safety
+///
+/// Same contract as [`GuestMemory::from_reservation`] with a `'static` lifetime.
+#[allow(unsafe_code)]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn recomp_abi_install_guest_memory_reserved(
+    rdram: *mut u8,
+    len_bytes: usize,
+    reserved_bytes: usize,
+) -> bool {
+    // SAFETY: forwarded from this function's contract.
+    install_guest_memory(unsafe { GuestMemory::from_reservation(rdram, len_bytes, reserved_bytes) })
+}
+
 /// Turns the arguments of an exported function into safe references. Used by
 /// [`recomp_export!`](crate::recomp_export); not meant to be called directly.
 ///
@@ -54,7 +71,11 @@ pub unsafe fn enter<'a>(
     ctx: *mut RecompContext,
 ) -> (&'static GuestMemory<'static>, &'a mut RecompContext) {
     let memory = guest_memory().expect("recomp_export called before install_guest_memory");
-    assert_eq!(rdram, memory.as_ptr(), "rdram pointer doesn't match the installed guest memory");
+    assert_eq!(
+        rdram,
+        memory.as_ptr(),
+        "rdram pointer doesn't match the installed guest memory"
+    );
     // SAFETY: the caller guarantees `ctx` is valid and unaliased; `as_mut` rejects null.
     let ctx = unsafe { ctx.as_mut() }.expect("null recomp_context");
     (memory, ctx)

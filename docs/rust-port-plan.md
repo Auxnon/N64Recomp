@@ -114,6 +114,20 @@ list of places, and every other crate uses `#![forbid(unsafe_code)]`.
   - Checked without a GPU: fast3d walks a display list in recomp RDRAM exactly as in its
     own big-endian image, also with KSEG0 pointers (`recomp-render/tests/walk.rs`).
   - Unsafe: creating the surface from SDL's window handles (`surface.rs`, budget item 4).
+  - Played on Linux (2026-10-13): title, gameplay, Stock Pot Inn, fades and the pause
+    screen look right. Fixed in the fork along the way (`recomp-mm`, now `2a2834f`):
+    `G_ZS_PRIM`; motion blur (S2DEX backgrounds copying framebuffers); 1/2-cycle
+    `FILLRECT` through the combiner (screen fades); `.NoN` depth clamped per fragment
+    with `DEPTH_CLIP_CONTROL`; `gEXVertexZTest` (light glows) in the depth-reading pass;
+    color saved into depth-buffer memory (the pause background). The window surface
+    asks for opaque alpha.
+  - Debugging without a display: `RECOMP_RENDER_DUMP=<dir>` saves frames
+    (`RECOMP_RENDER_DUMP_FRAMES`, or `touch <dir>/now` for the next
+    `RECOMP_RENDER_DUMP_COUNT`), replayed headless with `examples/replay.rs` and read with
+    `examples/inspect.rs`. Dumps hold RDRAM, so they're ROM-derived: never committed.
+  - Still open: frames are never written back to RDRAM, so CPU-side image work sees stale
+    memory (MM's pause anti-aliasing filter; likely the Pictograph Box); no RT64
+    reference frames for color checks; graphics settings ignored; Linux only.
 
 ## Target games
 

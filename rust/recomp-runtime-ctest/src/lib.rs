@@ -21,4 +21,39 @@ references! {
     ref___ll_lshift
     ref___checkHardware_msp ref___checkHardware_kmc ref___checkHardware_isv
     ref_is_proutSyncPrintf ref_osVoiceInit
+    ref_osEepromProbe ref_osEepromWrite ref_osEepromLongWrite ref_osEepromRead
+    ref_osEepromLongRead
+    ref_osFlashInit ref_osFlashReadStatus ref_osFlashReadId ref_osFlashClearStatus
+    ref_osFlashAllErase ref_osFlashAllEraseThrough ref_osFlashSectorErase
+    ref_osFlashSectorEraseThrough ref_osFlashCheckEraseEnd ref_osFlashWriteBuffer
+    ref_osFlashWriteArray ref_osFlashReadArray ref_osFlashChange
+    ref_osPfsInitPak ref_osPfsFreeBlocks ref_osPfsAllocateFile ref_osPfsDeleteFile
+    ref_osPfsFileState ref_osPfsFindFile ref_osPfsReadWriteFile ref_osPfsChecker
+    ref_osPfsNumFiles ref_osPfsRepairId
+}
+
+/// The size of each stand-in save buffer in `c/save_backend.cpp`.
+pub const SAVE_BUFFER_SIZE: usize = 0x20000;
+
+unsafe extern "C" {
+    /// Sets the save type both backends report (librecomp's `recomp::SaveType` order).
+    pub fn ctest_set_save_type(save_type: u32);
+    fn ctest_backend(use_rust: bool, buffer: *mut u8, messages: *mut i32, max: usize) -> usize;
+}
+
+/// One stand-in backend's save bytes and `osSendMesg` log (`mq, msg, flag` per call).
+pub fn backend(rust: bool) -> (Vec<u8>, Vec<i32>) {
+    let mut buffer = vec![0; SAVE_BUFFER_SIZE];
+    let mut messages = vec![0; 3 * 4096];
+    // SAFETY: the buffers are as large as the C side copies into.
+    let n = unsafe {
+        ctest_backend(
+            rust,
+            buffer.as_mut_ptr(),
+            messages.as_mut_ptr(),
+            messages.len(),
+        )
+    };
+    messages.truncate(n.min(messages.len()));
+    (buffer, messages)
 }

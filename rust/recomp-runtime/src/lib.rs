@@ -9,7 +9,11 @@
 
 #![deny(unsafe_code)]
 
+pub mod cxx;
+pub mod eep;
+pub mod flash;
 pub mod math;
+pub mod pak;
 pub mod print;
 pub mod stubs;
 pub mod ultra;

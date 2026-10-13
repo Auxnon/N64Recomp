@@ -221,6 +221,8 @@ Which side hosts the build:
 3. `GameFn::call`: calling an `unsafe extern "C" fn(*mut u8, *mut recomp_context)`
    (`LOOKUP_FUNC` targets, thread entry points).
 4. Creating a wgpu surface from the SDL window's raw handles.
+5. Calls into the runtime still in C++ (`recomp-runtime/src/cxx.rs`): one thin safe wrapper
+   per C function, and no other module calls C. It shrinks as those parts are ported.
 
 CI fails if `unsafe` appears outside these modules (a grep check plus `forbid` attributes).
 
@@ -350,6 +352,12 @@ Notes:
     leaves to x86 (shifts past 63, out-of-range float to `int64_t`). `osUnmapTLBAll` is
     behind the `tlb-stub` feature (`RECOMP_RUST_TLB_STUB`), off for Gauntlet, which has its
     own. `euc-jp` isn't ported: only commented-out code used it.
+  - Step 2 (2026-10-13): the save commands `eep`, `flash` and `pak` are in `recomp-runtime`.
+    They call librecomp's save buffer in `pi.cpp` (C entry points `recomp_save_*`), so save
+    files are still written by the same C++; that backend moves with PI in step 3.
+    `recomp-runtime-ctest` runs 20k random save calls through Rust and through the C++, each
+    on its own guest memory and stand-in save buffer, and compares save bytes, memory,
+    registers and `osSendMesg` calls after each one.
 - At the end, switch the build so Cargo hosts it (see Layout).
 
 ### Phase 6 (optional): generating Rust instead of C

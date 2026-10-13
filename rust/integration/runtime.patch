@@ -1,3 +1,43 @@
+diff --git a/librecomp/src/eep.cpp b/librecomp/src/eep.cpp
+index 048246e..ada8fbb 100644
+--- a/librecomp/src/eep.cpp
++++ b/librecomp/src/eep.cpp
+@@ -8,6 +8,9 @@ void save_read(RDRAM_ARG PTR(void) rdram_address, uint32_t offset, uint32_t coun
+ 
+ constexpr int eeprom_block_size = 8;
+ 
++#ifndef RECOMP_RUST_RUNTIME
++// Implemented in Rust (n64recomp/rust/recomp-runtime/src/eep.rs).
++
+ extern "C" void osEepromProbe_recomp(uint8_t* rdram, recomp_context* ctx) {
+     switch (recomp::get_save_type()) {
+         case recomp::SaveType::AllowAll:
+@@ -86,3 +89,5 @@ extern "C" void osEepromLongRead_recomp(uint8_t* rdram, recomp_context* ctx) {
+ 
+     ctx->r2 = 0;
+ }
++
++#endif
+diff --git a/librecomp/src/flash.cpp b/librecomp/src/flash.cpp
+index b9fd333..85904f0 100644
+--- a/librecomp/src/flash.cpp
++++ b/librecomp/src/flash.cpp
+@@ -20,6 +20,9 @@ void save_write(RDRAM_ARG PTR(void) rdram_address, uint32_t offset, uint32_t cou
+ void save_read(RDRAM_ARG PTR(void) rdram_address, uint32_t offset, uint32_t count);
+ void save_clear(uint32_t start, uint32_t size, char value);
+ 
++#ifndef RECOMP_RUST_RUNTIME
++// Implemented in Rust (n64recomp/rust/recomp-runtime/src/flash.rs).
++
+ std::array<char, page_size> write_buffer;
+ 
+ extern "C" void osFlashInit_recomp(uint8_t * rdram, recomp_context * ctx) {
+@@ -206,3 +209,5 @@ extern "C" void osFlashChange_recomp(uint8_t * rdram, recomp_context * ctx) {
+ 
+     assert(false);
+ }
++
++#endif
 diff --git a/librecomp/src/math_routines.cpp b/librecomp/src/math_routines.cpp
 index 4d6a01d..363b0f5 100644
 --- a/librecomp/src/math_routines.cpp
@@ -18,6 +58,56 @@ index 4d6a01d..363b0f5 100644
  }
 +
 +#endif
+diff --git a/librecomp/src/pak.cpp b/librecomp/src/pak.cpp
+index 0be1513..bb45342 100644
+--- a/librecomp/src/pak.cpp
++++ b/librecomp/src/pak.cpp
+@@ -4,6 +4,9 @@
+ #include "recomp.h"
+ #include "helpers.hpp"
+ 
++#ifndef RECOMP_RUST_RUNTIME
++// Implemented in Rust (n64recomp/rust/recomp-runtime/src/pak.rs).
++
+ extern "C" void osPfsInitPak_recomp(uint8_t * rdram, recomp_context* ctx) {
+     ctx->r2 = 1; // PFS_ERR_NOPACK
+ }
+@@ -49,3 +52,5 @@ extern "C" void osPfsNumFiles_recomp(uint8_t * rdram, recomp_context * ctx) {
+ extern "C" void osPfsRepairId_recomp(uint8_t * rdram, recomp_context * ctx) {
+     _return<s32>(ctx, 1); // PFS_ERR_NOPACK
+ }
++
++#endif
+diff --git a/librecomp/src/pi.cpp b/librecomp/src/pi.cpp
+index d7ebd53..d1ee9f0 100644
+--- a/librecomp/src/pi.cpp
++++ b/librecomp/src/pi.cpp
+@@ -206,6 +206,25 @@ void save_clear(uint32_t start, uint32_t size, char value) {
+     save_context.write_sempahore.signal();
+ }
+ 
++#ifdef RECOMP_RUST_RUNTIME
++// The save buffer for recomp-runtime's save commands (n64recomp/rust/recomp-runtime/src/cxx.rs).
++extern "C" void recomp_save_read(uint8_t* rdram, int32_t rdram_address, uint32_t offset, uint32_t count) {
++    save_read(rdram, rdram_address, offset, count);
++}
++
++extern "C" void recomp_save_write(uint8_t* rdram, int32_t rdram_address, uint32_t offset, uint32_t count) {
++    save_write(rdram, rdram_address, offset, count);
++}
++
++extern "C" void recomp_save_write_ptr(const uint8_t* in, uint32_t offset, uint32_t count) {
++    save_write_ptr(in, offset, count);
++}
++
++extern "C" void recomp_save_clear(uint32_t start, uint32_t size, uint8_t value) {
++    save_clear(start, size, (char)value);
++}
++#endif
++
+ size_t get_save_size(recomp::SaveType save_type) {
+     switch (save_type) {
+         case recomp::SaveType::AllowAll:
 diff --git a/librecomp/src/print.cpp b/librecomp/src/print.cpp
 index 944e9fe..d2017a4 100644
 --- a/librecomp/src/print.cpp
@@ -39,7 +129,7 @@ index 944e9fe..d2017a4 100644
 +
 +#endif
 diff --git a/librecomp/src/recomp.cpp b/librecomp/src/recomp.cpp
-index 8a03dbd..f364ee3 100644
+index 8a03dbd..b3f1504 100644
 --- a/librecomp/src/recomp.cpp
 +++ b/librecomp/src/recomp.cpp
 @@ -398,9 +398,14 @@ recomp::RomValidationError recomp::select_rom(const std::filesystem::path& rom_p
@@ -57,7 +147,38 @@ index 8a03dbd..f364ee3 100644
  
  enum class StatusReg {
      FR = 0x04000000,
-@@ -798,6 +803,12 @@ void recomp::start(
+@@ -722,6 +727,30 @@ bool recomp::flashram_allowed() {
+         save_type == SaveType::AllowAll;
+ }
+ 
++#ifdef RECOMP_RUST_RUNTIME
++// Save settings and errors for recomp-runtime (n64recomp/rust/recomp-runtime/src/cxx.rs).
++extern "C" uint32_t recomp_save_type() {
++    return (uint32_t)recomp::get_save_type();
++}
++
++extern "C" bool recomp_eeprom_allowed() {
++    return recomp::eeprom_allowed();
++}
++
++extern "C" bool recomp_flashram_allowed() {
++    return recomp::flashram_allowed();
++}
++
++extern "C" int32_t recomp_flash_handle() {
++    return recomp::flash_handle;
++}
++
++extern "C" [[noreturn]] void recomp_fatal_error(const char* message) {
++    ultramodern::error_handling::message_box(message);
++    ULTRAMODERN_QUICK_EXIT();
++}
++#endif
++
+ void recomp::start(
+     const recomp::Version& version,
+     ultramodern::renderer::WindowHandle window_handle,
+@@ -798,6 +827,12 @@ void recomp::start(
          return;
      }
  

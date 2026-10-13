@@ -9,6 +9,10 @@ rust-version.workspace = true
 
 [lib]
 crate-type = ["staticlib", "rlib"]
+# The exports call into the C++ runtime (src/cxx.rs), which only a game build links;
+# recomp-runtime-ctest tests them against stand-ins.
+test = false
+doctest = false
 
 [dependencies]
 recomp-abi = { path = "../recomp-abi" }

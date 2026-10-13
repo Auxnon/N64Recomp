@@ -8,7 +8,8 @@
 //! Address resolution follows RT64 (`RSP::fromSegmented`, `maskPhysicalAddress` and
 //! `RDP::maskAddress`) with its extended-RDRAM mode always on: an address with bit 31 set
 //! is a KSEG0 pointer and maps to `address - 0x80000000`, so memory above 8 MB (the mod
-//! heap at `0x81000000`) is reachable. Other addresses go through the segment table and
+//! heap at `0x81000000`) is reachable. KSEG1 and TLB-mapped pointers (`0xC0000000` and up)
+//! keep the hardware's masking instead. Other addresses go through the segment table and
 //! are masked to 24 bits as the RSP and RDP do. Zelda64Recomp turns extended mode on with
 //! `gEXSetRDRAMExtended(1)` before drawing; keeping it on for every list only changes
 //! addresses at or above `0x81000000`, which would otherwise wrap.
@@ -33,12 +34,20 @@ fn error(address: u64, length: u64, kind: MemoryErrorKind) -> MemoryError {
     }
 }
 
-/// Maps a resolved address to an RDRAM offset, applying `mask` unless it is a KSEG0 pointer.
+/// The end of KSEG0 and KSEG1 (`0x80000000`-`0xBFFFFFFF`); TLB-mapped KSSEG/KSEG3 follow.
+const KSEG1_END: u32 = 0xC000_0000;
+/// KSEG1, the uncached alias of KSEG0.
+const KSEG1: u32 = 0xA000_0000;
+
+/// Maps a resolved address to an RDRAM offset, applying `mask` unless it is a KSEG0 or
+/// KSEG1 pointer. A TLB-mapped pointer (Gauntlet Legends' `0xE0000000` game segment, which
+/// its boot code maps onto RDRAM from 0) is masked like a physical address, as the RSP's DMA
+/// does on hardware.
 fn physical(address: u32, mask: u32) -> u64 {
-    if address & EXTENDED != 0 {
-        u64::from(address - EXTENDED)
-    } else {
-        u64::from(address & mask)
+    match address {
+        KSEG1..KSEG1_END => u64::from((address - KSEG1) & mask),
+        EXTENDED..KSEG1 => u64::from(address - EXTENDED),
+        _ => u64::from(address & mask),
     }
 }
 
@@ -252,6 +261,10 @@ mod tests {
         // KSEG0 pointers bypass the segment table, unmasked, including the mod heap.
         assert_eq!(rdram.resolve(0x8012_3457), Ok(0x0012_3457));
         assert_eq!(rdram.resolve_masked(0x8100_0004), Ok(0x0100_0004));
+        // KSEG1 is the uncached alias; TLB-mapped pointers are masked like physical ones.
+        assert_eq!(rdram.resolve(0xA012_3457), Ok(0x0012_3457));
+        assert_eq!(rdram.resolve(0xE000_7600), Ok(0x0000_7600));
+        assert_eq!(rdram.resolve_masked(0xE0A0_7604), Ok(0x00A0_7600));
         // A segment holding a KSEG0 pointer resolves the same way.
         rdram.set_segment(8, 0x8100_0000);
         assert_eq!(rdram.resolve(0x0800_0010), Ok(0x0100_0010));

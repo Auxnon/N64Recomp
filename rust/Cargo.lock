@@ -185,7 +185,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "fast3d"
 version = "1.0.0"
-source = "git+https://github.com/Auxnon/fast3d-rs?rev=2ba8728#2ba8728a1f34bffa80d187f919f3e99a416b3379"
+source = "git+https://github.com/Auxnon/fast3d-rs?rev=db4c737#db4c7379dbf9bede4fdc44345b74ef02a56d69ba"
 dependencies = [
  "bytemuck",
  "log",
@@ -511,7 +511,7 @@ dependencies = [
 [[package]]
 name = "n64-gbi"
 version = "1.0.0"
-source = "git+https://github.com/Auxnon/fast3d-rs?rev=2ba8728#2ba8728a1f34bffa80d187f919f3e99a416b3379"
+source = "git+https://github.com/Auxnon/fast3d-rs?rev=db4c737#db4c7379dbf9bede4fdc44345b74ef02a56d69ba"
 
 [[package]]
 name = "n64recomp"

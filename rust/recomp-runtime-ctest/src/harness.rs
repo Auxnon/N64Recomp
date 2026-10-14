@@ -64,6 +64,21 @@ fn snapshot(words: &[AtomicU32]) -> Vec<u32> {
     words.iter().map(|w| w.load(Ordering::Relaxed)).collect()
 }
 
+/// Starts the Rust save backend (with its saving thread) in a scratch directory, sized like
+/// the C++ stand-in's buffer.
+pub fn start_rust_saves() {
+    let folder = std::env::temp_dir().join(format!("recomp-runtime-ctest-{}", std::process::id()));
+    recomp_runtime::saving::init(
+        folder,
+        "ctest",
+        crate::SAVE_BUFFER_SIZE,
+        recomp_runtime::saving::Host {
+            exited: || false,
+            report: |message| panic!("save failed: {message}"),
+        },
+    );
+}
+
 /// Two copies of the same random guest memory: the reference's, and the Rust side's, which is
 /// installed as the process's guest memory (so one `Pair` per test binary).
 pub struct Pair {
@@ -93,6 +108,7 @@ impl Pair {
             rust_words,
             rdram_words
         )));
+        start_rust_saves();
         Self {
             reference,
             rust: recomp_abi::guest_memory().unwrap(),
@@ -121,7 +137,8 @@ impl Pair {
             &ctx.r[4..8]
         );
         let (c_save, c_messages) = backend(false);
-        let (r_save, r_messages) = backend(true);
+        let (_, r_messages) = backend(true);
+        let r_save = recomp_runtime::saving::saves().snapshot();
         assert!(
             r_save == c_save,
             "{name}: save bytes from {:x?}",

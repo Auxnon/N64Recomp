@@ -5,6 +5,7 @@ fn main() {
         "c/save_backend.cpp",
         "c/save_prelude.hpp",
         "c/pi_reference.cpp",
+        "c/saving_reference.cpp",
     ] {
         println!("cargo:rerun-if-changed={file}");
     }
@@ -15,7 +16,8 @@ fn main() {
         .file("c/save_reference.cpp")
         .file("c/save_backend.cpp")
         .file("c/pi_reference.cpp")
-        .flag_if_supported("-std=c++17")
+        .file("c/saving_reference.cpp")
+        .flag_if_supported("-std=c++20")
         // As games build the runtime: release, so `assert` compiles out.
         .define("NDEBUG", None)
         .include("../../include")

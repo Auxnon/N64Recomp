@@ -6,6 +6,7 @@
 use recomp_abi::{recomp_export, reg, Gpr, GuestMemory, RecompContext};
 
 use crate::cxx;
+use crate::saving::saves;
 
 const ROM_BASE: u32 = 0x1000_0000;
 const SRAM_BASE: u32 = 0x0800_0000;
@@ -67,9 +68,9 @@ fn dma(mem: &GuestMemory, mq: i32, ram_address: Gpr, physical: u32, size: u32, w
         // The save buffer takes the address as a 32-bit guest pointer.
         let address = ram_address as i32;
         if write {
-            cxx::save_write(mem, address, physical - SRAM_BASE, size);
+            saves().write(mem, address, physical - SRAM_BASE, size);
         } else {
-            cxx::save_read(mem, address, physical - SRAM_BASE, size);
+            saves().read(mem, address, physical - SRAM_BASE, size);
         }
     } else {
         let what = if write { "write to" } else { "read from" };

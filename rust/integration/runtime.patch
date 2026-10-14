@@ -79,7 +79,7 @@ index 0be1513..bb45342 100644
 +
 +#endif
 diff --git a/librecomp/src/pi.cpp b/librecomp/src/pi.cpp
-index d7ebd53..a4c93c6 100644
+index d7ebd53..87b0883 100644
 --- a/librecomp/src/pi.cpp
 +++ b/librecomp/src/pi.cpp
 @@ -33,6 +33,8 @@ constexpr uint32_t phys_to_k1(uint32_t addr) {
@@ -99,28 +99,38 @@ index d7ebd53..a4c93c6 100644
  
  void recomp::do_rom_read(uint8_t* rdram, gpr ram_address, uint32_t physical_addr, size_t num_bytes) {
      // TODO use word copies when possible
-@@ -206,6 +209,39 @@ void save_clear(uint32_t start, uint32_t size, char value) {
-     save_context.write_sempahore.signal();
+@@ -84,6 +87,10 @@ void recomp::do_rom_pio(uint8_t* rdram, gpr ram_address, uint32_t physical_addr)
+     MEM_B(3, ram_address) = *rom_addr++;
  }
  
++#ifndef RECOMP_RUST_RUNTIME
++// The save buffer and its saving thread are implemented in Rust
++// (n64recomp/rust/recomp-runtime/src/saving.rs); see the forwarders below.
++
+ struct {
+     std::vector<char> save_buffer;
+     std::thread saving_thread;
+@@ -95,11 +102,13 @@ struct {
+     moodycamel::LightweightSemaphore swap_file_ready_sempahore;
+     std::mutex save_buffer_mutex;
+ } save_context;
++#endif
+ 
+ const std::u8string save_folder = u8"saves";
+ 
+ extern std::filesystem::path config_path;
+ 
++#ifndef RECOMP_RUST_RUNTIME
+ std::filesystem::path ultramodern::get_save_file_path() {
+     return save_context.save_file_path;
+ }
+@@ -205,6 +214,65 @@ void save_clear(uint32_t start, uint32_t size, char value) {
+ 
+     save_context.write_sempahore.signal();
+ }
++#endif
++
 +#ifdef RECOMP_RUST_RUNTIME
-+// The save buffer for recomp-runtime's save commands (n64recomp/rust/recomp-runtime/src/cxx.rs).
-+extern "C" void recomp_save_read(uint8_t* rdram, int32_t rdram_address, uint32_t offset, uint32_t count) {
-+    save_read(rdram, rdram_address, offset, count);
-+}
-+
-+extern "C" void recomp_save_write(uint8_t* rdram, int32_t rdram_address, uint32_t offset, uint32_t count) {
-+    save_write(rdram, rdram_address, offset, count);
-+}
-+
-+extern "C" void recomp_save_write_ptr(const uint8_t* in, uint32_t offset, uint32_t count) {
-+    save_write_ptr(in, offset, count);
-+}
-+
-+extern "C" void recomp_save_clear(uint32_t start, uint32_t size, uint8_t value) {
-+    save_clear(start, size, (char)value);
-+}
-+
 +// The ROM and PI handles for recomp-runtime's PI exports.
 +extern "C" const uint8_t* recomp_rom(size_t* len) {
 +    *len = rom.size();
@@ -134,21 +144,72 @@ index d7ebd53..a4c93c6 100644
 +extern "C" int32_t recomp_drive_handle() {
 +    return recomp::drive_handle;
 +}
-+#endif
 +
++// The save file lives in Rust (recomp-runtime/src/saving.rs); these forward to it.
++extern "C" void recomp_rs_init_saving(const char* folder, const char* game_id, size_t size);
++extern "C" void recomp_rs_change_save_file(const char* subfolder, const char* name);
++extern "C" size_t recomp_rs_save_file_path(char* out, size_t capacity);
++extern "C" void recomp_rs_join_saving_thread();
++
++extern std::atomic_bool exited;
++
++extern "C" bool recomp_exited() {
++    return exited;
++}
++
++extern "C" void recomp_message_box(const char* message) {
++    ultramodern::error_handling::message_box(message);
++}
++
++static const char* c_str(const std::u8string& text) {
++    return reinterpret_cast<const char*>(text.c_str());
++}
++
++size_t get_save_size(recomp::SaveType save_type);
++
++void ultramodern::init_saving(RDRAM_ARG1) {
++    std::u8string folder = (config_path / save_folder).u8string();
++    std::u8string game_id = recomp::current_game_id();
++    recomp_rs_init_saving(c_str(folder), c_str(game_id), get_save_size(recomp::get_save_type()));
++}
++
++void ultramodern::change_save_file(const std::u8string& subfolder, const std::u8string& name) {
++    recomp_rs_change_save_file(c_str(subfolder), c_str(name));
++}
++
++std::filesystem::path ultramodern::get_save_file_path() {
++    std::string path(recomp_rs_save_file_path(nullptr, 0), '\0');
++    recomp_rs_save_file_path(path.data(), path.size());
++    return std::filesystem::path{ std::u8string{ reinterpret_cast<const char8_t*>(path.data()), path.size() } };
++}
++
++void ultramodern::join_saving_thread() {
++    recomp_rs_join_saving_thread();
++}
++#endif
+ 
  size_t get_save_size(recomp::SaveType save_type) {
      switch (save_type) {
-         case recomp::SaveType::AllowAll:
-@@ -266,6 +302,8 @@ void ultramodern::join_saving_thread() {
+@@ -223,6 +291,7 @@ size_t get_save_size(recomp::SaveType save_type) {
+     return 0;
+ }
+ 
++#ifndef RECOMP_RUST_RUNTIME
+ void read_save_file() {
+     std::filesystem::path save_file_path = ultramodern::get_save_file_path();
+ 
+@@ -265,7 +334,10 @@ void ultramodern::join_saving_thread() {
+         save_context.saving_thread.join();
      }
  }
++#endif
  
 +#ifndef RECOMP_RUST_RUNTIME
 +// Implemented in Rust (n64recomp/rust/recomp-runtime/src/pi.rs).
  void do_dma(RDRAM_ARG PTR(OSMesgQueue) mq, gpr rdram_address, uint32_t physical_addr, uint32_t size, uint32_t direction) {
      // TODO asynchronous transfer
      // TODO implement unaligned DMA correctly
-@@ -397,3 +435,5 @@ extern "C" void osEPiRawStartDma_recomp(RDRAM_ARG recomp_context * ctx) {
+@@ -397,3 +469,5 @@ extern "C" void osEPiRawStartDma_recomp(RDRAM_ARG recomp_context * ctx) {
      );
      ULTRAMODERN_QUICK_EXIT();
  }

@@ -1,21 +1,20 @@
 //! Calls into the parts of N64ModernRuntime still in C++.
 //!
-//! Each C function gets one safe wrapper here, and nothing else in this crate calls C. The
-//! save functions are librecomp's save buffer (`pi.cpp`), which writes the save file from its
-//! own thread; `runtime.patch` adds their C entry points. This module goes away piece by piece
-//! as those parts are ported (docs/rust-port-plan.md, unsafe budget item 5).
+//! Each C function gets one safe wrapper here, and nothing else in this crate calls C; the
+//! C++ calls into Rust (`recomp_rs_*`) are here too. `runtime.patch` adds the C entry points
+//! on the C++ side. This module shrinks as those parts are ported (docs/rust-port-plan.md,
+//! unsafe budget item 5).
 
 #![allow(unsafe_code)]
 
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, CStr, CString};
+use std::path::PathBuf;
 
 use recomp_abi::GuestMemory;
 
+use crate::saving;
+
 unsafe extern "C" {
-    fn recomp_save_read(rdram: *mut u8, rdram_address: i32, offset: u32, count: u32);
-    fn recomp_save_write(rdram: *mut u8, rdram_address: i32, offset: u32, count: u32);
-    fn recomp_save_write_ptr(input: *const u8, offset: u32, count: u32);
-    fn recomp_save_clear(start: u32, size: u32, value: u8);
     fn recomp_save_type() -> u32;
     fn recomp_eeprom_allowed() -> bool;
     fn recomp_flashram_allowed() -> bool;
@@ -25,6 +24,8 @@ unsafe extern "C" {
     fn recomp_sram_allowed() -> bool;
     fn recomp_rom(len: *mut usize) -> *const u8;
     fn recomp_fatal_error(message: *const c_char) -> !;
+    fn recomp_message_box(message: *const c_char);
+    fn recomp_exited() -> bool;
     fn osSendMesg(rdram: *mut u8, mq: i32, msg: i32, flag: i32) -> i32;
 }
 
@@ -100,31 +101,6 @@ pub fn flash_handle() -> i32 {
     unsafe { recomp_flash_handle() }
 }
 
-/// Copies `count` save bytes from `offset` to guest memory at `address`.
-pub fn save_read(mem: &GuestMemory, address: i32, offset: u32, count: u32) {
-    // SAFETY: `mem` is the guest RDRAM the C++ runtime registered; it writes through the same
-    // byte-swizzled addressing as the guest.
-    unsafe { recomp_save_read(mem.as_ptr(), address, offset, count) }
-}
-
-/// Copies `count` bytes from guest memory at `address` into the save at `offset`.
-pub fn save_write(mem: &GuestMemory, address: i32, offset: u32, count: u32) {
-    // SAFETY: as in `save_read`; this only reads guest memory.
-    unsafe { recomp_save_write(mem.as_ptr(), address, offset, count) }
-}
-
-/// Copies `bytes` into the save at `offset`.
-pub fn save_write_bytes(bytes: &[u8], offset: u32) {
-    // SAFETY: the C++ copies `bytes.len()` bytes from a valid slice.
-    unsafe { recomp_save_write_ptr(bytes.as_ptr(), offset, bytes.len() as u32) }
-}
-
-/// Fills `size` save bytes from `start` with `value`.
-pub fn save_clear(start: u32, size: u32, value: u8) {
-    // SAFETY: touches only the C++ save buffer.
-    unsafe { recomp_save_clear(start, size, value) }
-}
-
 /// libultra's `OS_MESG_NOBLOCK`.
 pub const OS_MESG_NOBLOCK: i32 = 0;
 
@@ -138,4 +114,86 @@ pub fn send_mesg(mem: &GuestMemory, mq: i32, msg: i32, flag: i32) -> i32 {
 pub fn fatal_error(message: &CStr) -> ! {
     // SAFETY: `message` is a valid C string; the C++ doesn't return.
     unsafe { recomp_fatal_error(message.as_ptr()) }
+}
+
+/// Shows `message` and carries on.
+pub fn message_box(message: &str) {
+    let message = CString::new(message.replace('\0', " ")).expect("NULs replaced");
+    // SAFETY: a valid C string.
+    unsafe { recomp_message_box(message.as_ptr()) }
+}
+
+/// Whether the game is exiting (librecomp's `exited`).
+pub fn exited() -> bool {
+    // SAFETY: reads an atomic flag.
+    unsafe { recomp_exited() }
+}
+
+/// A C string from the C++ as UTF-8 (lossily, though librecomp's are UTF-8).
+///
+/// # Safety
+///
+/// `text` is a valid, NUL-terminated string for the call.
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+unsafe fn text(text: *const c_char) -> String {
+    // SAFETY: from the caller.
+    unsafe { CStr::from_ptr(text) }.to_string_lossy().into_owned()
+}
+
+/// `ultramodern::init_saving`: the save file `<folder>/<game_id>.bin`, `size` bytes.
+///
+/// # Safety
+///
+/// Both strings are valid and NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn recomp_rs_init_saving(folder: *const c_char, game_id: *const c_char, size: usize) {
+    // SAFETY: from the caller.
+    let (folder, game_id) = unsafe { (text(folder), text(game_id)) };
+    saving::init(
+        PathBuf::from(folder),
+        &game_id,
+        size,
+        saving::Host {
+            exited,
+            report: message_box,
+        },
+    );
+}
+
+/// `ultramodern::change_save_file`.
+///
+/// # Safety
+///
+/// Both strings are valid and NUL-terminated.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn recomp_rs_change_save_file(subfolder: *const c_char, name: *const c_char) {
+    // SAFETY: from the caller.
+    let (subfolder, name) = unsafe { (text(subfolder), text(name)) };
+    saving::saves().change_file(&subfolder, &name);
+}
+
+/// `ultramodern::get_save_file_path`: copies up to `capacity` bytes of the path to `out` and
+/// returns its full length, so the C++ can size its buffer with a first call.
+///
+/// # Safety
+///
+/// `out` is valid for `capacity` bytes (it may be null when `capacity` is 0).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn recomp_rs_save_file_path(out: *mut u8, capacity: usize) -> usize {
+    let path = saving::saves().path();
+    let bytes = path.as_os_str().as_encoded_bytes();
+    let n = bytes.len().min(capacity);
+    if n > 0 {
+        // SAFETY: `out` holds `capacity` >= `n` bytes.
+        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, n) };
+    }
+    bytes.len()
+}
+
+/// `ultramodern::join_saving_thread`.
+#[unsafe(no_mangle)]
+pub extern "C" fn recomp_rs_join_saving_thread() {
+    if let Some(saves) = saving::try_saves() {
+        saves.join();
+    }
 }

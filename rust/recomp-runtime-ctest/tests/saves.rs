@@ -247,7 +247,8 @@ fn save_commands_match_the_cpp() {
         }
     }
     // The sequence did write and erase something.
-    let (save, messages) = backend(true);
+    let save = recomp_runtime::saving::saves().snapshot();
+    let (_, messages) = backend(true);
     assert!(save.iter().any(|&b| b != 0 && b != 0xFF));
     assert!(!messages.is_empty());
 }

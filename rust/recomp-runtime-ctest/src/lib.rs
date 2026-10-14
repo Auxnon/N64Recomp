@@ -47,7 +47,8 @@ unsafe extern "C" {
     fn ctest_backend(use_rust: bool, buffer: *mut u8, messages: *mut i32, max: usize) -> usize;
 }
 
-/// One stand-in backend's save bytes and `osSendMesg` log (`mq, msg, flag` per call).
+/// One stand-in backend's save bytes and `osSendMesg` log (`mq, msg, flag` per call). The
+/// Rust side's save bytes are unused since the Rust commands use recomp-runtime's backend.
 pub fn backend(rust: bool) -> (Vec<u8>, Vec<i32>) {
     let mut buffer = vec![0; SAVE_BUFFER_SIZE];
     let mut messages = vec![0; 3 * 4096];

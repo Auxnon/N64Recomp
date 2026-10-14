@@ -3,6 +3,7 @@
 use recomp_abi::{recomp_export, reg, GuestMemory, RecompContext};
 
 use crate::cxx::{self, SaveType};
+use crate::saving;
 
 const EEPROM_BLOCK_SIZE: u32 = 8;
 /// libultra's `EEPROM_TYPE_4K` and `EEPROM_TYPE_16K`.
@@ -27,11 +28,11 @@ fn transfer(
     mem: &GuestMemory,
     ctx: &mut RecompContext,
     count: u32,
-    copy: fn(&GuestMemory, i32, u32, u32),
+    copy: fn(&saving::Saves, &GuestMemory, i32, u32, u32),
 ) {
     require_eeprom();
     let (offset, buffer) = block_and_buffer(ctx);
-    copy(mem, buffer, offset, count);
+    copy(saving::saves(), mem, buffer, offset, count);
     ctx.set_return_u32(0);
 }
 
@@ -53,23 +54,23 @@ recomp_export! {
 
     /// `s32 osEepromWrite(OSMesgQueue*, u8 address, u8* buffer)`: one 8-byte block.
     fn osEepromWrite_recomp(mem: &GuestMemory, ctx: &mut RecompContext) {
-        transfer(mem, ctx, EEPROM_BLOCK_SIZE, cxx::save_write);
+        transfer(mem, ctx, EEPROM_BLOCK_SIZE, saving::Saves::write);
     }
 
     /// `s32 osEepromLongWrite(OSMesgQueue*, u8 address, u8* buffer, int bytes)`
     fn osEepromLongWrite_recomp(mem: &GuestMemory, ctx: &mut RecompContext) {
         let count = long_count(ctx);
-        transfer(mem, ctx, count, cxx::save_write);
+        transfer(mem, ctx, count, saving::Saves::write);
     }
 
     /// `s32 osEepromRead(OSMesgQueue*, u8 address, u8* buffer)`: one 8-byte block.
     fn osEepromRead_recomp(mem: &GuestMemory, ctx: &mut RecompContext) {
-        transfer(mem, ctx, EEPROM_BLOCK_SIZE, cxx::save_read);
+        transfer(mem, ctx, EEPROM_BLOCK_SIZE, saving::Saves::read);
     }
 
     /// `s32 osEepromLongRead(OSMesgQueue*, u8 address, u8* buffer, int bytes)`
     fn osEepromLongRead_recomp(mem: &GuestMemory, ctx: &mut RecompContext) {
         let count = long_count(ctx);
-        transfer(mem, ctx, count, cxx::save_read);
+        transfer(mem, ctx, count, saving::Saves::read);
     }
 }

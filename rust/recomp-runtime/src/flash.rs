@@ -9,6 +9,7 @@ use std::sync::Mutex;
 use recomp_abi::{recomp_export, reg, RecompContext};
 
 use crate::cxx;
+use crate::saving::saves;
 
 const FLASH_SIZE: u32 = 1024 * 1024 / 8;
 const PAGE_SIZE: u32 = 128;
@@ -36,7 +37,7 @@ fn require_flash() {
 
 fn erase_all(ctx: &mut RecompContext) {
     require_flash();
-    cxx::save_clear(0, SAVE_SIZE, 0xFF);
+    saves().clear(0, SAVE_SIZE, 0xFF);
     ctx.set_return_u32(0);
 }
 
@@ -48,7 +49,7 @@ fn erase_page(ctx: &mut RecompContext) {
         ctx.set_return_i32(-1);
         return;
     }
-    cxx::save_clear(page * PAGE_SIZE, PAGE_SIZE, 0xFF);
+    saves().clear(page * PAGE_SIZE, PAGE_SIZE, 0xFF);
     ctx.set_return_u32(0);
 }
 
@@ -123,7 +124,7 @@ recomp_export! {
         require_flash();
         let page = ctx.r[reg::A0] as u32;
         let buffer = *WRITE_BUFFER.lock().unwrap_or_else(|e| e.into_inner());
-        cxx::save_write_bytes(&buffer, page.wrapping_mul(PAGE_SIZE));
+        saves().write_bytes(&buffer, page.wrapping_mul(PAGE_SIZE));
         ctx.set_return_u32(0);
     }
 
@@ -136,7 +137,7 @@ recomp_export! {
         let sp = ctx.r[reg::SP];
         let pages = mem.read_u32(sp.wrapping_add(0x10));
         let mq = mem.read_u32(sp.wrapping_add(0x14)) as i32;
-        cxx::save_read(mem, dram, page.wrapping_mul(PAGE_SIZE), pages.wrapping_mul(PAGE_SIZE));
+        saves().read(mem, dram, page.wrapping_mul(PAGE_SIZE), pages.wrapping_mul(PAGE_SIZE));
         cxx::send_mesg(mem, mq, 0, cxx::OS_MESG_NOBLOCK);
         ctx.set_return_u32(0);
     }

@@ -222,8 +222,10 @@ Which side hosts the build:
 3. `GameFn::call`: calling an `unsafe extern "C" fn(*mut u8, *mut recomp_context)`
    (`LOOKUP_FUNC` targets, thread entry points).
 4. Creating a wgpu surface from the SDL window's raw handles.
-5. Calls into the runtime still in C++ (`recomp-runtime/src/cxx.rs`): one thin safe wrapper
-   per C function, and no other module calls C. It shrinks as those parts are ported.
+5. The C boundary with the runtime still in C++ (`recomp-runtime/src/cxx.rs`), both ways:
+   one thin safe wrapper per C function Rust calls, and the `recomp_rs_*` entry points C++
+   forwards into (taking C strings and buffers). No other module touches C. It shrinks as
+   those parts are ported.
 
 CI fails if `unsafe` appears outside these modules (a grep check plus `forbid` attributes).
 
@@ -370,6 +372,14 @@ Notes:
     `tlb.cpp` maps pages into. `GuestMemory` now knows the reservation
     (`recomp_abi_install_guest_memory_reserved`), the renderer stays bounded to RDRAM, and
     the PI test DMAs past RDRAM too.
+  - Step 3b (2026-10-14): the save file is in `recomp-runtime/src/saving.rs`: the in-memory
+    save, the saving thread that coalesces writes, and the `.temp`/`.bak` handling.
+    `ultramodern::init_saving`, `change_save_file`, `get_save_file_path` and
+    `join_saving_thread` forward to it, so startup, shutdown and the mod API are unchanged;
+    the save commands call it directly. `recomp-runtime-ctest` compiles librecomp's own
+    backend (verbatim from `pi.cpp` and `files.cpp`) and runs both on real files in scratch
+    folders: an existing file, a backup-only file, a short file, bursts of writes, and a save
+    that can't be written; the in-memory save, guest memory and every file must match.
 - At the end, switch the build so Cargo hosts it (see Layout).
 
 ### Phase 6 (optional): generating Rust instead of C
